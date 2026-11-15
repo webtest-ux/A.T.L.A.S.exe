@@ -1,0 +1,11 @@
+{
+  "name": "atlas",
+  "version": "5.0.0",
+  "private": true,
+  "description": "A.T.L.A.S \u2014 3D Solar System explorer & mission-control simulator (three.js r128)",
+  "scripts": {
+    "dev": "npx --yes http-server . -p 5173 -c-1 -o",
+    "start": "npx --yes http-server . -p 5173 -c-1",
+    "check": "node scripts/check-syntax.mjs"
+  }
+}

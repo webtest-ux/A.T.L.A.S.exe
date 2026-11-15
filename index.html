@@ -1,0 +1,1819 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.T.L.A.S — Advanced Terrestrial and Astronomical Learning &amp; Exploration System</title>
+    <meta name="description" content="A.T.L.A.S — an interactive 3D space exploration and mission-control platform: explore the Solar System, build spacecraft and fly missions.">
+    <meta name="application-name" content="A.T.L.A.S">
+    <meta name="theme-color" content="#020617">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D Digital Twin, Launch Pad Ascent & Orbital Viewport -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Phosphor Icons for crisp aerospace iconography -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <script src="js/tailwind.config.js"></script>
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="app-shell font-sans selection:bg-cyan-500 selection:text-slate-950">
+    <div id="aeroBoot" role="status" aria-live="polite"><div class="ab-ring"></div><b>Loading A.T.L.A.S…</b><small style="letter-spacing:.12em;text-transform:uppercase;font-size:11px;color:#67e8f9">Advanced Terrestrial and Astronomical Learning &amp; Exploration System</small><small>Preparing the 3D Solar System and mission systems. This can take a few seconds on slower connections.</small></div>
+    <script>
+    /* Loading screen + 3D-unavailable notice. Independent of the app scripts so it still works if one fails. */
+    (function () {
+        var done = false;
+        function notice(text) {
+            var n = document.createElement('div'); n.id = 'aeroNotice'; n.setAttribute('role', 'status');
+            var t = document.createElement('span'); t.textContent = text; n.appendChild(t);
+            var x = document.createElement('button'); x.textContent = 'Dismiss'; x.onclick = function () { n.remove(); }; n.appendChild(x);
+            document.body.appendChild(n);
+        }
+        function finish() {
+            if (done) return; done = true;
+            var b = document.getElementById('aeroBoot');
+            if (b) { b.classList.add('done'); setTimeout(function () { b.remove(); }, 450); }
+            var gl = false;
+            try { var c = document.createElement('canvas'); gl = !!(c.getContext('webgl') || c.getContext('experimental-webgl')); } catch (e) {}
+            if (typeof THREE === 'undefined') notice('The 3D library could not load (you may be offline, or a network filter blocked it). Parts of the app may not work. Check your connection and reload.');
+            else if (!gl) notice('3D graphics (WebGL) are turned off in this browser, so a simplified view is shown. Turn on hardware acceleration or try another browser for full 3D.');
+        }
+        document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { if (typeof THREE === 'undefined') finish(); }, 300); });
+        window.addEventListener('load', function () { setTimeout(finish, 200); });
+        setTimeout(finish, 12000);
+    })();
+    </script>
+
+
+    <!-- ================= EXPERIENCE 0 & 1: CINEMATIC MAIN MENU & 3D SOLAR SYSTEM EXPLORER ================= -->
+    <div id="solarSystemStageShell" class="fixed inset-0 z-40 flex flex-col bg-[#02050B] overflow-hidden select-none">
+        
+        <!-- Shared Full-Screen 3D Solar System Canvas (Powers both Main Menu Background & Let's Explore Mode) -->
+        <div id="solarSystemCanvasMount" class="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing z-0"></div>
+
+        <!-- Subtle Vignette Overlay for High Contrast Readability -->
+        <div id="solarVignetteOverlay" class="absolute inset-0 pointer-events-none z-[1]" style="background: radial-gradient(circle at 50% 45%, rgba(2, 5, 11, 0.15) 0%, rgba(2, 5, 11, 0.72) 100%);"></div>
+
+        <!-- ================= VIEW A: CINEMATIC MAIN MENU OVERLAY ================= -->
+        <div id="mainMenuOverlay" class="relative z-10 flex-1 flex flex-col justify-between p-4 sm:p-8 pointer-events-none">
+            
+            <!-- Top Bar: Profile, Audio, Settings & ATLAS Access -->
+            <div class="w-full flex flex-wrap items-center justify-between gap-3 pointer-events-auto">
+                <div class="hud-floating-glass px-3.5 py-2 rounded-2xl flex items-center gap-3 border border-cyan-400/30">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center">
+                        <i class="ph-duotone ph-planet text-cyan-300 text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="font-mono text-[9px] uppercase tracking-[0.22em] text-cyan-400 font-bold">NASA / JPL EDUCATIONAL SIMULATION</div>
+                        <div class="font-display text-xs font-bold text-white">A.T.L.A.S // EXPLORATION SYSTEM v5.0</div>
+                    </div>
+                </div>
+
+                <!-- Right Controls: Profile, Audio Mute, Scale Info & ATLAS -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="openProfileCustomizerModal()" class="hud-floating-glass px-3 py-2 rounded-xl hover:border-cyan-400/60 text-xs font-mono text-slate-200 flex items-center gap-2 transition">
+                        <i class="ph-fill ph-user-circle-gear text-cyan-400 text-base"></i>
+                        <span id="menuCmdrCallsignLabel" class="font-bold text-white">CMDR. VANCE</span>
+                        <span class="text-[10px] text-cyan-300 hidden sm:inline">• Profile</span>
+                    </button>
+                    <button onclick="toggleAudioMute()" id="menuAudioBtn" class="hud-floating-glass px-3 py-2 rounded-xl hover:border-cyan-400/60 text-xs font-mono text-emerald-300 flex items-center gap-1.5 transition" title="Toggle Web Audio Telemetry & Sound Effects">
+                        <i id="menuAudioIcon" class="ph-fill ph-speaker-high text-sm"></i>
+                        <span id="menuAudioLabel">Audio: ON</span>
+                    </button>
+                    <button onclick="openModal('manualModal')" class="hud-floating-glass px-3 py-2 rounded-xl hover:border-cyan-400/60 text-xs font-mono text-slate-200 flex items-center gap-1.5 transition">
+                        <i class="ph-duotone ph-sliders text-cyan-400 text-sm"></i>
+                        <span class="hidden sm:inline">Handbook & Settings</span>
+                    </button>
+                    <button onclick="maximizeNexiPanel()" class="hud-floating-glass px-3 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/30 border-cyan-400/45 text-xs font-mono font-bold text-cyan-200 flex items-center gap-1.5 transition">
+                        <i class="ph-fill ph-robot text-cyan-300 text-sm"></i>
+                        <span>ATLAS AI</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Center Hero Branding & Dual Primary Experience Cards -->
+            <div class="my-auto max-w-4xl w-full mx-auto text-center space-y-6 pointer-events-auto py-4">
+                <div class="space-y-2.5">
+                    <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-950/75 border border-cyan-400/40 text-cyan-300 font-mono text-[10px] uppercase tracking-[0.25em] shadow-lg">
+                        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                        <span>INTERACTIVE 3D SOLAR SYSTEM & SPACECRAFT ARCHITECT</span>
+                    </div>
+                    <h1 class="font-display text-4xl sm:text-6xl font-bold text-white tracking-tight drop-shadow-[0_6px_28px_rgba(0,0,0,0.95)]">
+                        A.T.L.A.S
+                    </h1>
+                    <div class="font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-cyan-300 font-semibold">
+                        Advanced Terrestrial and Astronomical Learning &amp; Exploration System
+                    </div>
+                    <p class="menu-tagline text-sm sm:text-base max-w-2xl mx-auto font-light">
+                        "Explore the Universe. Discover Its History. Command Your Mission."
+                    </p>
+                </div>
+
+                <!-- Two Primary Experience Buttons -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pt-2 text-left">
+                    
+                    <!-- BUTTON 1: LET'S EXPLORE (Solar System & Cosmic History) -->
+                    <button onclick="switchAppExperience('explore')" class="group glass-panel rounded-2xl p-5 sm:p-6 border border-cyan-400/45 hover:border-cyan-300 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_-10px_rgba(56,189,248,0.35)] flex flex-col justify-between relative overflow-hidden">
+                        <div class="absolute -right-10 -top-10 w-36 h-36 rounded-full bg-cyan-500/10 blur-2xl group-hover:bg-cyan-400/25 transition-all"></div>
+                        <div class="space-y-3 relative z-10">
+                            <div class="flex items-center justify-between">
+                                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500/30 to-blue-600/30 border border-cyan-300/50 flex items-center justify-center shadow-lg">
+                                    <i class="ph-duotone ph-planet text-cyan-300 text-2xl group-hover:rotate-12 transition-transform"></i>
+                                </div>
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-200 border border-cyan-400/40">
+                                    3D SOLAR SYSTEM + TIMELINE
+                                </span>
+                            </div>
+                            <div>
+                                <div class="font-mono text-[10px] uppercase tracking-widest text-cyan-300 font-bold">Discover the Solar System</div>
+                                <h2 class="font-display text-xl sm:text-2xl font-bold text-white mt-0.5 flex items-center gap-2">
+                                    <span>LET'S EXPLORE</span>
+                                    <i class="ph-bold ph-arrow-right text-cyan-300 text-lg group-hover:translate-x-1.5 transition-transform"></i>
+                                </h2>
+                            </div>
+                            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                                Discover the Solar System in interactive 3D and travel through planetary history.
+                            </p>
+                        </div>
+                        <div class="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-cyan-300">
+                            <span>Sun • 8 Planets • Moon &amp; Europa</span>
+                            <span class="font-bold group-hover:underline">Launch Explorer →</span>
+                        </div>
+                    </button>
+
+                    <!-- BUTTON 2: PLAY GAME (Spacecraft Engineering & Mission Control) -->
+                    <button onclick="switchAppExperience('game')" class="group glass-panel rounded-2xl p-5 sm:p-6 border border-teal-400/45 hover:border-emerald-300 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_50px_-10px_rgba(52,211,153,0.35)] flex flex-col justify-between relative overflow-hidden">
+                        <div class="absolute -right-10 -top-10 w-36 h-36 rounded-full bg-emerald-500/10 blur-2xl group-hover:bg-emerald-400/25 transition-all"></div>
+                        <div class="space-y-3 relative z-10">
+                            <div class="flex items-center justify-between">
+                                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500/30 to-emerald-600/30 border border-teal-300/50 flex items-center justify-center shadow-lg">
+                                    <i class="ph-duotone ph-rocket-launch text-emerald-300 text-2xl group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform"></i>
+                                </div>
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-400/40">
+                                    SOLO &amp; 4-PLAYER CO-OP
+                                </span>
+                            </div>
+                            <div>
+                                <div class="font-mono text-[10px] uppercase tracking-widest text-emerald-300 font-bold">Enter Mission Control</div>
+                                <h2 class="font-display text-xl sm:text-2xl font-bold text-white mt-0.5 flex items-center gap-2">
+                                    <span>PLAY GAME</span>
+                                    <i class="ph-bold ph-arrow-right text-emerald-300 text-lg group-hover:translate-x-1.5 transition-transform"></i>
+                                </h2>
+                            </div>
+                            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                                Enter the existing spacecraft engineering and mission-control simulator.
+                            </p>
+                        </div>
+                        <div class="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono text-emerald-300">
+                            <span>4 NASA Directives • Pad 3A9 &amp; 3D Orbit</span>
+                            <span class="font-bold group-hover:underline">Enter Mission Control →</span>
+                        </div>
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- Bottom Status Strip: Live Background Solar System Controls -->
+            <div class="w-full flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400 pointer-events-auto">
+                <div class="hud-floating-glass px-3 py-1.5 rounded-xl flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span>LIVE 3D SOLAR SYSTEM ORRERY BACKGROUND • Drag Space to Rotate</span>
+                </div>
+                <div class="hud-floating-glass px-3 py-1.5 rounded-xl flex items-center gap-3">
+                    <span>Scale Mode: <strong class="text-cyan-300">Cinematic Compressed Scale</strong> (All worlds simultaneously visible)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= VIEW B: LET'S EXPLORE — SAME OPS LAYOUT AS PLAY GAME (header · rail · 3D viewport · dashboard · info panel) ================= -->
+        <div id="solarExplorerOverlay" class="hidden relative z-10 flex-1 flex flex-col min-h-0 explore-shell">
+
+            <!-- TOP COMMAND HEADER (matches #opsCommandBar) -->
+            <header id="explorerCommandBar" class="ops-header shrink-0 z-30">
+                <div class="w-full flex items-center gap-2 lg:gap-3 min-w-0">
+                    <button onclick="switchAppExperience('menu')" class="ops-brand shrink-0" title="Return to Main Menu">
+                        <span class="ops-brand-mark"><i class="ph ph-orbit"></i></span>
+                        <span class="hidden md:flex flex-col leading-none text-left">
+                            <span class="font-display text-[13px] font-bold tracking-[0.06em] text-[color:var(--text-primary)]">A.T.L.A.S</span>
+                            <span class="font-mono text-[9.5px] uppercase tracking-[0.06em] text-[color:var(--accent-teal)] mt-1">LET'S EXPLORE · SOLAR SYSTEM</span>
+                        </span>
+                    </button>
+
+                    <div class="ops-divider hidden md:block"></div>
+
+                    <div class="flex flex-col gap-[3px] shrink-0">
+                        <span id="explorerBodyStatusPill" class="ops-status ops-status-go" title="Currently selected celestial body">
+                            <span class="ops-dot"></span><span id="explorerBodyStatusText">EARTH</span>
+                        </span>
+                        <span id="solarScaleModeBadge" class="ops-status ops-status-net max-w-[9.5rem] truncate" title="Scale mode (positions and sizes are compressed for viewing)">Cinematic (Not to Scale)</span>
+                    </div>
+
+                    <!-- Planetary telemetry cards (from the planetary fact database) -->
+                    <div id="explorerTelemetryStrip" class="ops-telemetry-strip flex-1 min-w-0">
+                        <div class="ops-tm" title="Selected celestial body"><div class="ops-tm-label"><i class="ph ph-crosshair-simple"></i>Body</div><div id="exTmBody" class="tm-value font-mono font-bold text-cyan-300 whitespace-nowrap">—</div></div>
+                        <div class="ops-tm" title="Classification"><div class="ops-tm-label"><i class="ph ph-tag"></i>Type</div><div id="exTmType" class="tm-value font-mono font-bold text-[color:var(--text-primary)] whitespace-nowrap">—</div></div>
+                        <div class="ops-tm" title="Mean distance from the Sun"><div class="ops-tm-label"><i class="ph ph-sun"></i>From Sun</div><div id="exTmDist" class="tm-value font-mono font-bold text-amber-300 whitespace-nowrap">—</div></div>
+                        <div class="ops-tm" title="Orbital period"><div class="ops-tm-label"><i class="ph ph-arrows-clockwise"></i>Orbit</div><div id="exTmOrbit" class="tm-value font-mono font-bold text-emerald-300 whitespace-nowrap">—</div></div>
+                        <div class="ops-tm" title="Rotation period (sidereal)"><div class="ops-tm-label"><i class="ph ph-arrow-clockwise"></i>Rotation</div><div id="exTmRot" class="tm-value font-mono font-bold text-purple-300 whitespace-nowrap">—</div></div>
+                        <div class="ops-tm" title="Exploration status (as of mid-2026)"><div class="ops-tm-label"><i class="ph ph-satellite"></i>Exploration</div><div id="exTmStatus" class="tm-value font-mono font-bold text-teal-300 whitespace-nowrap">—</div></div>
+                    </div>
+
+                    <!-- Player profile (shared with Play Game) -->
+                    <div class="ops-profile shrink-0">
+                        <div id="explorerAvatarMount" onclick="openProfileCustomizerModal()" class="rounded-lg bg-slate-950 border border-cyan-400/40 overflow-hidden shrink-0 cursor-pointer" style="width: 32px; height: 32px;" title="Customize astronaut profile"></div>
+                        <div class="text-left leading-tight min-w-0 hidden min-[1600px]:block">
+                            <div id="explorerCallsignLabel" class="font-mono text-[11px] font-bold text-[color:var(--text-primary)] truncate max-w-[7.5rem]">CMDR. VANCE</div>
+                            <div class="text-[9.5px] font-mono text-[color:var(--text-secondary)]">Explorer</div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button onclick="toggleAudioMute()" id="explorerAudioBtn" class="ops-icon-btn" title="Audio: ON (click to mute)"><i id="explorerAudioIcon" class="ph ph-speaker-high"></i></button>
+                        <button onclick="openExplorerNotifications()" class="ops-icon-btn relative" title="Guide notifications from ATLAS">
+                            <i class="ph ph-bell"></i><span id="explorerNotifBadge" class="ops-badge is-warn hidden">1</span>
+                        </button>
+                        <button onclick="toggleNexiAssistantButton()" class="ops-icon-btn" title="ATLAS planetary guide"><i class="ph ph-robot"></i></button>
+                        <button onclick="openModal('manualModal')" class="ops-icon-btn" title="Handbook & Settings"><i class="ph ph-gear-six"></i></button>
+                        <button onclick="switchAppExperience('menu')" class="ops-icon-btn ex-hide-md" title="Return to Main Menu"><i class="ph ph-house"></i></button>
+                        <button onclick="switchAppExperience('game')" class="ops-primary-btn" title="Open PLAY GAME (your spacecraft design is kept)">
+                            <i class="ph-fill ph-rocket-launch"></i>
+                            <span class="font-display font-bold text-[11.5px]">Play<span class="ex-hide-md"> Game</span></span>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- WORKSPACE GRID (matches #opsWorkspace with the ops panel open and the workstation collapsed) -->
+            <main id="explorerWorkspace" class="explore-workspace">
+
+                <!-- LEFT NAVIGATION RAIL — celestial catalog (rendered by renderSolarBodyList) -->
+                <nav id="solarNavRail" class="ops-rail" aria-label="Solar System navigation">
+                    <div id="solarBodyListContainer" class="ops-rail-group"></div>
+                    <div class="ops-rail-group">
+                        <button class="ops-rail-btn" data-rail="ex-settings" data-label="Settings & Handbook" aria-label="Settings" onclick="openModal('manualModal')"><i class="ph ph-gear-six"></i></button>
+                    </div>
+                </nav>
+
+                <!-- CENTER: 3D viewport + bottom dashboard -->
+                <section id="solarExplorerMiddlePanels" class="explore-center">
+
+                    <div id="explorerViewportPanel" class="glass-panel rounded-2xl overflow-hidden relative border border-cyan-500/25 shadow-2xl">
+                        <div class="hud-corner hud-tl"></div><div class="hud-corner hud-tr"></div>
+                        <div class="hud-corner hud-bl"></div><div class="hud-corner hud-br"></div>
+
+                        <!-- The shared WebGL canvas is moved here while LET'S EXPLORE is active -->
+                        <div id="explorerViewportMount" class="absolute inset-0 cursor-grab active:cursor-grabbing"></div>
+
+                        <!-- TOP HUD -->
+                        <div class="absolute top-3 left-3 right-3 z-20 flex flex-wrap items-start justify-between gap-2 pointer-events-none">
+                            <div class="hud-floating-glass px-3 py-1.5 rounded-xl pointer-events-auto">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                    <span id="explorerViewportTitle" class="font-mono text-[11px] uppercase tracking-wider text-cyan-300 font-bold">3D SOLAR SYSTEM // OVERVIEW</span>
+                                </div>
+                                <div class="text-[10px] text-slate-400 font-mono">Drag to rotate · Shift/right-drag to pan · Scroll to zoom · Click a world to select</div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+                                <div class="hud-floating-glass flex flex-wrap items-center gap-1 p-1 rounded-xl">
+                                    <button onclick="resetSolarSystemOverviewCamera()" id="exCamBtn-overview" class="ex-cam-btn" title="Full System View"><i class="ph ph-globe-stand"></i><span>Full System</span></button>
+                                    <button onclick="focusSelectedSolarOrbit()" id="exCamBtn-focus" class="ex-cam-btn" title="Focus Orbit on the selected world"><i class="ph ph-crosshair"></i><span>Focus Orbit</span></button>
+                                    <button onclick="zoomCloseToSelectedSolarBody()" id="exCamBtn-close" class="ex-cam-btn" title="Close-up of the selected world"><i class="ph ph-magnifying-glass-plus"></i><span>Close-Up</span></button>
+                                    <button onclick="exCameraView('orbit')" id="exCamBtn-orbit" class="ex-cam-btn" title="Orbital view: the selected world's orbit around its parent"><i class="ph ph-circle-dashed"></i><span>Orbit View</span></button>
+                                    <button onclick="exCameraView('moons')" id="exCamBtn-pair" class="ex-cam-btn hidden" title="Planet with its moons, or a moon with its planet"><i class="ph ph-planet"></i><span>Moon System</span></button>
+                                </div>
+                                <button onclick="toggleExplorerPanelsCollapsed()" id="solarCleanViewBtn" class="hud-floating-glass px-2.5 py-1.5 rounded-xl text-slate-200 border border-slate-600/50 font-mono text-[11px] font-bold flex items-center gap-1.5" title="Hide the info panel and dashboard for an unobstructed view"><i class="ph ph-eye"></i><span>Hide Panels</span></button>
+                                <button onclick="toggleExplorerViewportExpand()" id="explorerExpandBtn" class="hud-floating-glass px-2.5 py-1.5 rounded-xl text-cyan-200 border border-cyan-400/40 font-mono text-[11px] font-bold flex items-center gap-1.5" title="Expanded 3D View">
+                                    <i id="explorerExpandIcon" class="ph-bold ph-corners-out text-sm text-cyan-300"></i><span id="explorerExpandLabel">EXPAND 3D VIEW</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Catalog · display layers · moon navigation strip -->
+                        <div id="exCatalogPanel" class="ex-float-panel hidden" role="dialog" aria-label="Solar System catalog"></div>
+                        <div id="exLayerPanel" class="ex-float-panel ex-layer-panel hidden" role="dialog" aria-label="Display layers"></div>
+                        <div id="exMoonStrip" class="ex-moon-strip hidden" aria-label="Moon navigation"></div>
+
+                        <!-- BOTTOM HUD: orbital animation & display controls (independent from the history timeline) -->
+                        <div class="absolute bottom-2 left-2.5 right-2.5 z-20 pointer-events-none">
+                            <div class="pointer-events-auto hud-floating-glass flex flex-wrap items-center justify-between gap-1 px-2.5 py-1 rounded-xl">
+                                <div class="flex flex-wrap items-center gap-1">
+                                    <span class="text-[9px] font-mono uppercase text-slate-400 hidden sm:inline mr-1">ORBITS:</span>
+                                    <button onclick="toggleSolarOrbitsPause()" id="solarOrbitPauseBtn" class="ex-hud-btn" title="Pause or resume planetary orbital motion"><i id="solarOrbitPauseIcon" class="ph-fill ph-pause"></i> <span id="solarOrbitPauseLabel">Orbits: Playing</span></button>
+                                    <button onclick="cycleSolarOrbitSpeed()" id="solarOrbitSpeedBtn" class="ex-hud-btn" title="Orbital animation speed (separate from the history timeline)">Orbit Speed: 1x</button>
+                                    <button onclick="toggleSolarOrbitPaths()" id="solarPathsToggleBtn" class="ex-hud-btn is-on" title="Orbit paths: 8 major planets and their major moons">Orbit Paths: ON</button>
+                                    <button onclick="toggleSolarLabels()" id="solarLabelsToggleBtn" class="ex-hud-btn is-on" title="Show/hide labels">Labels: ON</button>
+                                    <button onclick="toggleSolarScalePreset()" id="solarScaleToggleBtn" class="ex-hud-btn" title="Cinematic (not to scale) vs Scientific (true relative sizes and distances)">Scale: Cinematic</button>
+                                    <button onclick="toggleSolarEuropaCutaway()" id="explorerCutawayHudBtn" class="ex-hud-btn hidden" title="Educational subsurface-ocean cross-section">Europa Cutaway: OFF</button>
+                                    <button onclick="toggleExplorerLayerPanel()" id="exLayersBtn" class="ex-hud-btn" title="Display layers (belts, comets, prominences, Venus radar, Titan haze)"><i class="ph ph-stack"></i> Layers</button>
+                                    <button onclick="toggleExplorerCatalog()" id="exCatalogBtn" class="ex-hud-btn" title="Catalog: moons, dwarf planets, asteroids, comets, belts"><i class="ph ph-list-magnifying-glass"></i> Catalog</button>
+                                </div>
+                                <div class="flex items-center gap-1.5 font-mono text-[9.5px]">
+                                    <span id="exScaleNotice" class="px-1.5 py-0.5 rounded border bg-purple-500/15 text-purple-300 border-purple-500/30">CINEMATIC · SIZES & DISTANCES NOT TO SCALE</span>
+                                    <button onclick="toggleSolarExplorerFullscreen()" class="ex-hud-btn" title="Browser fullscreen"><i class="ph ph-arrows-out-simple"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BOTTOM EXPLORATION DASHBOARD: Body status · Cosmic history · Discoveries -->
+                    <div id="solarTimelineFooter" class="ops-dashboard glass-panel shrink-0">
+                        <div class="ops-dash-head">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <i class="ph ph-telescope text-[color:var(--accent-cyan)]"></i>
+                                <h3 class="ops-section-title">Exploration Dashboard</h3>
+                                <span id="timelineScopeBadge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-400/35 truncate">COSMIC HISTORY</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button onclick="setSolarInfoTab('missions')" class="ops-ghost-btn" title="Open the Space Missions tab"><i class="ph ph-rocket"></i><span>Missions</span></button>
+                            </div>
+                        </div>
+
+                        <div class="ops-dash-grid ex-dash-grid">
+                            <!-- PANEL A: CELESTIAL BODY STATUS -->
+                            <section class="ops-dash-card">
+                                <div class="ops-card-title"><i class="ph ph-planet"></i>Celestial Body Status</div>
+                                <div class="flex items-baseline justify-between gap-2"><span class="ops-k">Selected</span><span id="exStatBody" class="ops-v truncate">—</span></div>
+                                <div class="flex items-baseline justify-between gap-2"><span class="ops-k">Camera</span><span id="exStatCamera" class="ops-v ops-v-soft truncate">—</span></div>
+                                <div class="flex items-baseline justify-between gap-2"><span class="ops-k">Rotation</span><span id="exStatRotation" class="ops-v ops-v-soft truncate">—</span></div>
+                                <div class="flex items-baseline justify-between gap-2"><span class="ops-k">Orbit</span><span id="exStatOrbit" class="ops-v ops-v-soft truncate">—</span></div>
+                                <div class="flex items-baseline justify-between gap-2"><span class="ops-k">Layer</span><span id="exStatLayer" class="ops-v ops-v-soft truncate">—</span></div>
+                            </section>
+
+                            <!-- PANEL B: COSMIC HISTORY -->
+                            <section class="ops-dash-card">
+                                <div class="ops-card-title"><i class="ph ph-clock-counter-clockwise"></i>Cosmic History
+                                    <span id="timelineEraDateBadge" class="ml-auto font-mono text-[10px] font-bold text-amber-300 normal-case tracking-normal truncate">—</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    <span id="timelineReconstructionBadge" class="ops-pill truncate">RECONSTRUCTION</span>
+                                    <span id="exHistoryStepLabel" class="ml-auto font-mono text-[9.5px] text-[color:var(--text-muted)] shrink-0">Era 1 / 1</span>
+                                </div>
+                                <div id="historyTimelineDetailCard" class="ex-history-card"></div>
+                                <input id="historyTimelineSlider" type="range" min="0" max="7" step="1" value="0" oninput="selectHistoryTimelineIndex(this.value)" class="w-full h-1.5 accent-purple-400" aria-label="Historical era">
+                                <div id="historyTimelineNodesStrip" class="hidden"></div>
+                                <div class="flex items-center gap-1">
+                                    <button onclick="stepHistoryTimeline(-1)" class="ops-ghost-btn flex-1 justify-center"><i class="ph ph-caret-left"></i><span>Earlier Era</span></button>
+                                    <button onclick="toggleTimelineAutoPlay()" id="timelinePlayBtn" class="ops-ghost-btn flex-1 justify-center" style="color:#c4b5fd;border-color:rgba(167,139,250,.4)"><i id="timelinePlayIcon" class="ph-fill ph-play"></i><span id="timelinePlayLabel">Auto-Tour</span></button>
+                                    <button onclick="stepHistoryTimeline(1)" class="ops-ghost-btn flex-1 justify-center"><span>Later Era</span><i class="ph ph-caret-right"></i></button>
+                                </div>
+                            </section>
+
+                            <!-- PANEL C: EXPLORATION DISCOVERIES -->
+                            <section class="ops-dash-card">
+                                <div class="ops-card-title"><i class="ph ph-sparkle"></i>Exploration Discoveries
+                                    <button onclick="setSolarInfoTab('discoveries')" class="ml-auto ops-link">Details</button>
+                                </div>
+                                <div id="exDiscoveriesList" class="flex flex-col gap-1 min-w-0"></div>
+                            </section>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- RIGHT PLANETARY INFORMATION PANEL (matches #opsSidePanel) -->
+                <aside id="solarDossierCard" class="ops-side glass-panel ex-side" aria-label="Planetary information">
+                    <div class="ops-side-head">
+                        <div class="min-w-0 flex items-center gap-2.5">
+                            <span id="exInfoGlyph" class="ex-glyph"></span>
+                            <div class="min-w-0">
+                                <div id="exInfoName" class="font-display text-[15px] font-bold text-[color:var(--text-primary)] truncate">—</div>
+                                <div id="exInfoClass" class="font-mono text-[10px] text-[color:var(--text-secondary)] truncate">—</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ops-side-tabs ex-side-tabs" role="tablist">
+                        <button class="ops-side-tab" data-ex-tab="data" onclick="setSolarInfoTab('data')" role="tab"><i class="ph ph-ruler"></i><span>Data</span></button>
+                        <button class="ops-side-tab" data-ex-tab="physical" onclick="setSolarInfoTab('physical')" role="tab"><i class="ph ph-mountains"></i><span>Physical</span></button>
+                        <button class="ops-side-tab" data-ex-tab="discoveries" onclick="setSolarInfoTab('discoveries')" role="tab"><i class="ph ph-lightbulb"></i><span>Discoveries</span></button>
+                        <button class="ops-side-tab" data-ex-tab="missions" onclick="setSolarInfoTab('missions')" role="tab"><i class="ph ph-rocket"></i><span>Missions</span></button>
+                    </div>
+                    <div class="ops-side-legend">
+                        <span><b class="ops-src ops-src-model">FACT</b> published value</span>
+                        <span><b class="ops-src ops-src-sim">≈</b> approximate / uncertain</span>
+                        <span><b class="ops-src ops-src-nm">N/A</b> not applicable</span>
+                    </div>
+                    <div id="solarDossierContent" class="ops-side-body"></div>
+                    <div id="exInfoActions" class="ex-side-actions"></div>
+                    <div class="ops-side-foot">
+                        <i class="ph ph-info"></i>
+                        <span>Values from NASA / ESA planetary fact sheets. 3D sizes, distances and history visuals are illustrative reconstructions.</span>
+                    </div>
+                </aside>
+            </main>
+        </div>
+    </div>
+
+    <!-- ================= OPS COMMAND BAR (PLAY GAME MODE) — compact professional header ================= -->
+    <header id="opsCommandBar" class="ops-header shrink-0 z-30">
+        <div class="w-full flex items-center gap-2 lg:gap-3 min-w-0">
+
+            <!-- Brand / Mode / Mission status / Connection -->
+            <button onclick="switchAppExperience('menu')" class="ops-brand shrink-0" title="Return to Main Menu (preserves spacecraft design)">
+                <span class="ops-brand-mark"><i class="ph ph-orbit"></i></span>
+                <span class="hidden md:flex flex-col leading-none text-left">
+                    <span class="font-display text-[13px] font-bold tracking-[0.06em] text-[color:var(--text-primary)]">A.T.L.A.S</span>
+                    <span id="headerAppModeLabel" class="font-mono text-[9.5px] uppercase tracking-[0.06em] text-[color:var(--accent-teal)] mt-1">PLAY GAME // SOLO</span>
+                </span>
+            </button>
+
+            <div class="ops-divider hidden md:block"></div>
+
+            <div class="min-w-0 hidden min-[1720px]:flex flex-col leading-tight shrink" style="max-width: 15rem;">
+                <h1 id="headerScenarioTitle" class="font-display text-[12.5px] font-semibold text-[color:var(--text-primary)] truncate">EARTH-PULSE: Climate & SAR Radar</h1>
+                <div class="flex items-center gap-1.5 mt-0.5 min-w-0">
+                    <span id="activeRoleBadge" class="ops-chip ops-chip-teal truncate">
+                        <i class="ph-fill ph-user-focus"></i> FLIGHT (P1)
+                    </span>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-[3px] shrink-0">
+                <span id="headerMissionStatusPill" class="ops-status ops-status-go" title="Overall mission readiness (from the GO/NO-GO constraint model)">
+                    <span class="ops-dot"></span><span id="headerMissionStatusText">GO</span>
+                </span>
+                <button onclick="openModal('roomSyncModal')" class="ops-status ops-status-net" title="Connection: same-browser BroadcastChannel room. Click for room code & packet sync.">
+                    <span id="syncDotIndicator" class="ops-dot ops-dot-live"></span>
+                    <span>NET <strong id="headerRoomCode" class="text-[color:var(--text-primary)]">JPL-4</strong></span>
+                </button>
+            </div>
+
+            <!-- Engineering telemetry cards (computed by the existing mission model) -->
+            <div id="headerTelemetryStrip" class="ops-telemetry-strip flex-1 min-w-0">
+                <div class="ops-tm" title="Total Mission Cost vs Allocated NASA Budget">
+                    <div class="ops-tm-label"><i class="ph ph-currency-dollar"></i>Budget</div>
+                    <div id="gaugeBudget" class="tm-value font-mono font-bold text-emerald-400 whitespace-nowrap">$112M / $180M</div>
+                </div>
+                <div class="ops-tm" title="Spacecraft Total Wet Mass vs Launch Vehicle Capacity to the selected orbit">
+                    <div class="ops-tm-label"><i class="ph ph-scales"></i>Mass</div>
+                    <div id="gaugeMass" class="tm-value font-mono font-bold text-cyan-300 whitespace-nowrap">420 / 650 kg</div>
+                </div>
+                <div class="ops-tm" title="Net power balance (generated − consumed) and battery capacity">
+                    <div class="ops-tm-label"><i class="ph ph-lightning"></i>Power</div>
+                    <div id="gaugePower" class="tm-value font-mono font-bold text-amber-300 whitespace-nowrap">+145W (850Wh)</div>
+                </div>
+                <div class="ops-tm" title="DSN downlink capacity vs science data generated by instruments">
+                    <div class="ops-tm-label"><i class="ph ph-broadcast"></i>DSN Link</div>
+                    <div id="gaugeData" class="tm-value font-mono font-bold text-purple-300 whitespace-nowrap">150 / 130 Gbps</div>
+                </div>
+                <div class="ops-tm" title="Projected science yield vs mission target">
+                    <div class="ops-tm-label"><i class="ph ph-atom"></i>Science</div>
+                    <div id="gaugeScience" class="tm-value font-mono font-bold text-blue-300 whitespace-nowrap">390 / 350 pts</div>
+                </div>
+                <div class="ops-tm" title="Engineering reliability incl. radiation & redundancy">
+                    <div class="ops-tm-label"><i class="ph ph-shield-check"></i>Assurance</div>
+                    <div id="gaugeReliability" class="tm-value font-mono font-bold text-teal-300 whitespace-nowrap">94%</div>
+                </div>
+            </div>
+
+            <!-- Player profile (avatar size & card style remain user-adjustable) -->
+            <div id="headerProfileCardContainer" class="ops-profile shrink-0">
+                <div id="headerAvatarMount" onclick="openProfileCustomizerModal()" class="rounded-lg bg-slate-950 border border-cyan-400/40 overflow-hidden shrink-0 cursor-pointer transition-all duration-300" style="width: 32px; height: 32px;" title="Click to Customize Astronaut Profile"></div>
+                <div id="headerProfileTextBlock" class="text-left leading-tight min-w-0 hidden min-[1600px]:block">
+                    <div class="flex items-center gap-1.5 flex-nowrap">
+                        <span id="headerCallsignLabel" class="font-mono text-[11px] font-bold text-[color:var(--text-primary)] truncate max-w-[7.5rem]">CMDR. VANCE</span>
+                        <span id="headerDeptBadge" class="px-1.5 py-0.2 rounded text-[8px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">FLIGHT</span>
+                        <span id="headerReactionPill" class="px-1 py-0.2 rounded text-[8px] font-mono bg-emerald-500/20 text-emerald-300">READY</span>
+                    </div>
+                    <div id="headerFullNameLine" class="hidden text-[10px] font-medium text-slate-200 truncate">Cmdr. Aria Vance</div>
+                    <div id="headerCharRoleSub" class="text-[9.5px] font-mono text-[color:var(--text-secondary)] truncate max-w-[10rem]">Flight Director</div>
+                </div>
+                <button onclick="openProfileCustomizerModal()" class="ops-icon-btn ops-icon-btn-sm" title="Customize avatar size, card style, callsign & astronaut">
+                    <i class="ph ph-sliders-horizontal"></i>
+                    <span id="headerCustomizeBtnLabel" class="sr-only">CUSTOMIZE</span>
+                </button>
+            </div>
+
+            <!-- Notifications / ATLAS / Settings / Start mission -->
+            <div class="flex items-center gap-1 shrink-0">
+                <button onclick="openModal('diagnosticsModal')" class="ops-icon-btn relative" title="Engineering notifications (Chief Engineer advisory log)">
+                    <i class="ph ph-bell"></i>
+                    <span id="headerNotifBadge" class="ops-badge hidden">0</span>
+                </button>
+                <button onclick="toggleNexiAssistantButton()" id="headerNexiBtn" class="ops-icon-btn" title="ATLAS Guide Bot & Tutorial">
+                    <i class="ph ph-robot"></i>
+                </button>
+                <button onclick="openModal('manualModal')" class="ops-icon-btn" title="Handbook & Settings">
+                    <i class="ph ph-gear-six"></i>
+                </button>
+                <button onclick="toggleOpsSidePanel()" id="headerOpsPanelBtn" class="ops-icon-btn" title="Show / hide the spacecraft operations panel (Telemetry · Attitude · Thermal · Power · Comms)">
+                    <i class="ph ph-sidebar-simple" style="transform: scaleX(-1);"></i>
+                </button>
+                <button id="headerLaunchPollBtn" onclick="triggerLetsExploreFlow()" class="ops-primary-btn" title="Start the guided mission experience (briefing → 4 stages → GO/NO-GO)">
+                    <i class="ph-fill ph-rocket-launch"></i>
+                    <span class="hidden 2xl:flex flex-col leading-none text-left">
+                        <span class="font-display font-bold text-[11.5px] tracking-wide">LET'S EXPLORE!</span>
+                        <span id="headerExploreSubLabel" class="font-mono text-[8.5px] uppercase tracking-wider mt-0.5 opacity-80">START MISSION EXPERIENCE</span>
+                    </span>
+                    <span class="2xl:hidden font-display font-bold text-[11.5px]">Start</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ================= MAIN OPERATIONS WORKSPACE: RAIL | WORKSTATION | 3D CENTER + DASHBOARD | OPS PANEL ================= -->
+    <main id="opsWorkspace" class="main-workspace w-full">
+
+        <!-- LEFT NAVIGATION RAIL (Play Game) -->
+        <nav id="gameNavRail" class="ops-rail" aria-label="Mission workstation navigation">
+            <div class="ops-rail-group">
+                <button class="ops-rail-btn" data-rail="dashboard" data-label="Dashboard" aria-label="Dashboard" onclick="railNavigate('dashboard')"><i class="ph ph-squares-four"></i></button>
+                <button class="ops-rail-btn" data-rail="directive" data-label="Mission Directive" aria-label="Mission Directive" onclick="railNavigate('directive')"><i class="ph ph-flag-banner"></i></button>
+                <button class="ops-rail-btn" data-rail="bus" data-label="Spacecraft Systems" aria-label="Spacecraft Systems" onclick="railNavigate('bus')"><i class="ph ph-cube"></i></button>
+                <button class="ops-rail-btn" data-rail="payload" data-label="Scientific Instruments" aria-label="Scientific Instruments" onclick="railNavigate('payload')"><i class="ph ph-aperture"></i></button>
+                <button class="ops-rail-btn" data-rail="orbit" data-label="Orbital Configuration" aria-label="Orbital Configuration" onclick="railNavigate('orbit')"><i class="ph ph-planet"></i></button>
+                <button class="ops-rail-btn" data-rail="team" data-label="Mission Control" aria-label="Mission Control" onclick="railNavigate('team')"><i class="ph ph-users-three"></i></button>
+                <span class="ops-rail-sep"></span>
+                <button class="ops-rail-btn" data-rail="flight" data-label="Flight Simulation (GO/NO-GO → Launch)" aria-label="Flight Simulation" onclick="railNavigate('flight')"><i class="ph ph-rocket-launch"></i></button>
+                <button class="ops-rail-btn" data-rail="logs" data-label="Flight Logs" aria-label="Flight Logs" onclick="railNavigate('logs')"><i class="ph ph-clipboard-text"></i><span id="savedCountBadge" class="ops-rail-count">0</span></button>
+            </div>
+            <div class="ops-rail-group">
+                <button class="ops-rail-btn" data-rail="explore" data-label="Solar System Explorer" aria-label="Solar System Explorer" onclick="railNavigate('explore')"><i class="ph ph-globe-hemisphere-west"></i></button>
+                <button class="ops-rail-btn" data-rail="menu" data-label="Main Menu" aria-label="Main Menu" onclick="railNavigate('menu')"><i class="ph ph-house"></i></button>
+                <button class="ops-rail-btn" data-rail="settings" data-label="Settings & Handbook" aria-label="Settings" onclick="railNavigate('settings')"><i class="ph ph-gear-six"></i></button>
+            </div>
+        </nav>
+
+        <!-- ENGINEERING WORKSTATION (collapsible; Dashboard view hides it to give the 3D scene full width) -->
+        <section id="workstationPanel" class="left-workstation h-full min-h-0 flex flex-col">
+            
+            <!-- Game Mode & Crew / Character Bar -->
+            <div id="modeSelectorBar" class="glass-panel shrink-0 rounded-xl px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1.5">
+                <div class="flex items-center gap-1 bg-slate-950/90 p-0.5 rounded-lg border border-slate-800">
+                    <button onclick="setGameMode('solo', true)" id="modeBtn-solo" class="px-2 py-0.5 rounded text-[11px] font-semibold transition bg-[#142238] text-cyan-200 border border-cyan-400/45">
+                        <i class="ph-bold ph-user mr-1"></i>Solo
+                    </button>
+                    <button onclick="setGameMode('coop', true)" id="modeBtn-coop" class="px-2 py-0.5 rounded text-[11px] font-medium transition text-slate-300 hover:text-white">
+                        <i class="ph-bold ph-users-four mr-1"></i>4-Player Crew
+                    </button>
+                    <button onclick="setGameMode('sandbox', false)" id="modeBtn-sandbox" class="px-2 py-0.5 rounded text-[11px] font-medium transition text-slate-300 hover:text-white">
+                        <i class="ph-bold ph-infinity mr-1"></i>Sandbox
+                    </button>
+                </div>
+
+                <!-- Quick Crew / Preset Controls -->
+                <div class="flex items-center gap-1">
+                    <button onclick="openMissionLauncher('mode')" id="xpModeBadge" title="Change experience mode or mission">ENGINEER MODE</button>
+                    <button onclick="openTermGlossary()" id="glossaryBtn" class="px-2 py-0.5 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-400/30 text-[10px] font-mono" title="Glossary of space terms"><i class="ph-bold ph-book-open-text"></i> Glossary</button>
+                    <button onclick="openProgressPanel()" id="progressBtn" class="px-2 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border border-amber-400/30 text-[10px] font-mono" title="Achievements, discoveries and challenges"><i class="ph-bold ph-trophy"></i> <span>0/10</span></button>
+                    <button onclick="openProfileCustomizerModal()" class="px-2 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 text-[10px] font-mono transition flex items-center gap-1" title="Open Astronaut Profile Customizer or 4-Player Crew Assignment Lobby">
+                        <i class="ph-fill ph-identification-badge"></i> Profile / Crew
+                    </button>
+                    <button onclick="setCameraViewMode('pad')" class="px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-mono transition flex items-center gap-1" title="Inspect Rocket on Launch Pad 3A9">
+                        <i class="ph-fill ph-rocket"></i> Pad 3A9
+                    </button>
+                    <button onclick="applyOptimalPreset()" class="px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono transition flex items-center gap-1">
+                        <i class="ph-bold ph-magic-wand"></i> Baseline
+                    </button>
+                    <button onclick="railNavigate('dashboard')" class="ws-collapse-btn hidden lg:grid" title="Collapse workstation (Dashboard view — full-width 3D scene)" aria-label="Collapse workstation">
+                        <i class="ph ph-caret-double-left text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Cadet guided-mission bar (Cadet mode only) -->
+            <div id="cadetGuideBar" class="hidden shrink-0"></div>
+
+            <!-- Guided 4-Stage Mission Operations Tracker (Revealed when Mission Experience is active) -->
+            <div id="missionOpsStageBar" class="hidden glass-panel shrink-0 rounded-xl px-2.5 py-1.5 border border-teal-400/40 bg-teal-950/20 space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-teal-400 animate-ping"></span>
+                        <span class="font-mono text-[10px] uppercase tracking-wider font-bold text-teal-300">ACTIVE MISSION OPERATIONS FLOW</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button onclick="advanceMissionOpsStage()" id="missionOpsNextBtn" class="px-2 py-0.5 rounded bg-teal-500/25 hover:bg-teal-500/40 text-teal-200 border border-teal-400/40 font-mono text-[10px] font-bold flex items-center gap-1">
+                            <span>Next Stage</span> <i class="ph-bold ph-arrow-right"></i>
+                        </button>
+                        <button onclick=" initiateGoNoGoPoll()" class="px-2.5 py-0.5 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono text-[10px] font-extrabold flex items-center gap-1 shadow">
+                            <i class="ph-fill ph-check-square-offset"></i> GO/NO-GO POLL
+                        </button>
+                    </div>
+                </div>
+                <div id="missionOpsStagesGrid" class="grid grid-cols-4 gap-1"></div>
+            </div>
+
+            <!-- 4-Player Specialist Seat Console Switcher with Live Crew Avatars -->
+            <div id="coopRoleBar" class="hidden glass-panel shrink-0 rounded-xl p-2 border-l-4 border-l-amber-400 bg-amber-950/10 space-y-1.5">
+                <div class="flex flex-wrap items-center justify-between gap-1.5">
+                    <div class="flex items-center gap-1.5">
+                        <span class="px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 font-mono text-[9px] font-bold">4-PLAYER CREW</span>
+                        <span class="text-[11px] text-slate-300">Room <strong id="coopBarRoomCode" class="text-cyan-300 font-mono">JPL-4</strong></span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button onclick="openModal('coopLobbyModal')" class="px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 font-mono text-[10px] font-bold flex items-center gap-1">
+                            <i class="ph-fill ph-users-four"></i> Lobby
+                        </button>
+                        <button onclick="openModal('roomSyncModal')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-mono text-[10px] flex items-center gap-1">
+                            <i class="ph-bold ph-broadcast"></i> Sync
+                        </button>
+                        <button onclick="triggerTeamNegotiationEvent()" class="px-2 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] flex items-center gap-1 shadow">
+                            <i class="ph-bold ph-chats-circle"></i> Vote
+                        </button>
+                    </div>
+                </div>
+                <div id="coopSeatCardsBar" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5"></div>
+            </div>
+
+            <!-- Workstation Navigation Tabs -->
+            <div id="workstationTabsBar" class="grid grid-cols-6 gap-1 bg-slate-950/85 p-1 rounded-xl border border-slate-800/90 shrink-0 shadow-inner">
+                <button onclick="switchTab('directive')" id="tabBtn-directive" class="tab-btn py-1.5 px-1 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition bg-[#142238] text-cyan-200 border border-cyan-400/45 shadow-sm">
+                    <i class="ph-duotone ph-flag-banner text-xs"></i>
+                    <span>1. Directive</span>
+                </button>
+                <button onclick="switchTab('builder')" id="tabBtn-builder" class="tab-btn py-1.5 px-1 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition text-slate-400 hover:text-slate-200">
+                    <i class="ph-duotone ph-wrench text-xs"></i>
+                    <span>Build</span>
+                </button>
+                <button onclick="switchTab('bus')" id="tabBtn-bus" class="tab-btn py-1.5 px-1 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition text-slate-400 hover:text-slate-200">
+                    <i class="ph-duotone ph-cube text-xs"></i>
+                    <span>2. Bus & Power</span>
+                </button>
+                <button onclick="switchTab('payload')" id="tabBtn-payload" class="tab-btn py-1.5 px-1 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition text-slate-400 hover:text-slate-200">
+                    <i class="ph-duotone ph-radar text-xs"></i>
+                    <span>3. Instruments</span>
+                </button>
+                <button onclick="switchTab('orbit')" id="tabBtn-orbit" class="tab-btn py-1.5 px-1 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition text-slate-400 hover:text-slate-200">
+                    <i class="ph-duotone ph-planet text-xs"></i>
+                    <span>4. Orbit & Rocket</span>
+                </button>
+                <button onclick="switchTab('team')" id="tabBtn-team" class="tab-btn py-1.5 px-1 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition text-slate-400 hover:text-slate-200">
+                    <i class="ph-duotone ph-users-three text-xs"></i>
+                    <span>5. Flight Deck</span>
+                </button>
+            </div>
+
+            <!-- TAB CONTENT CONTAINERS (Expands to fill 100% of remaining vertical column height) -->
+            <div class="glass-panel rounded-2xl p-3 flex-1 min-h-0 h-full flex flex-col justify-between overflow-hidden">
+                
+                <!-- TAB 1: MISSION DIRECTIVE & SCENARIO SELECTION (Full-height vertical distribution) -->
+                <div id="tab-directive" class="tab-pane flex-1 min-h-0 h-full flex flex-col justify-between gap-2.5 overflow-y-auto pr-0.5">
+                    <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800/90 pb-2 shrink-0">
+                        <div>
+                            <span class="text-[9px] font-mono uppercase text-cyan-400 block leading-none">SEAT 1 // FLIGHT DIRECTOR CONSOLE</span>
+                            <h2 class="text-sm sm:text-base font-bold text-white leading-tight mt-0.5">Select NASA Mission Directive & Destination</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[10px] text-slate-400 font-mono">Tier:</span>
+                            <select id="difficultySelect" onchange="changeDifficulty(this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[11px] font-mono text-cyan-300 focus:outline-none focus:border-cyan-500">
+                                <option value="cadet">Cadet (+15% Budget)</option>
+                                <option value="engineer" selected>Flight Engineer (JPL)</option>
+                                <option value="director">Director (Strict)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Scenario Cards 2x2 Grid stretches evenly (flex-1 auto-rows-fr) to eliminate bottom empty space -->
+                    <div id="scenarioCardsContainer" class="grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-2.5 flex-1 min-h-0"></div>
+
+                    <!-- Active Scenario Requirements Brief + Commander Character Card -->
+                    <div id="scenarioBriefBox" class="p-3 rounded-xl bg-slate-950/90 border border-cyan-500/25 space-y-2 shrink-0 shadow-inner"></div>
+
+                    <!-- Active Architecture & Subsystem Manifest Summary -->
+                    <div id="directiveArchitectureSummary" class="p-2.5 rounded-xl bg-slate-950/85 border border-slate-800/90 space-y-1.5 shrink-0"></div>
+                </div>
+
+                <!-- TAB 2: SPACECRAFT BUS, CLEANROOM EXPLODED VIEW & EECOM TRIM -->
+                <div id="tab-builder" class="tab-pane hidden flex-1 min-h-0 h-full flex flex-col"></div>
+                <div id="tab-bus" class="tab-pane hidden flex-1 min-h-0 h-full flex flex-col justify-between gap-2 overflow-hidden">
+                    <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800 pb-1.5 shrink-0">
+                        <div>
+                            <span class="text-[9px] font-mono uppercase text-amber-400 block leading-none">SEAT 2 // SYSTEMS ENGINEER (EECOM) CONSOLE</span>
+                            <h2 class="text-sm sm:text-base font-bold text-white leading-tight mt-0.5">Spacecraft Bus, Power & EECOM Reserve Trim</h2>
+                        </div>
+                        <button onclick="toggleEecomBatteryReserve()" id="eecomReserveBtn" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold border transition bg-slate-900 text-slate-300 border-slate-700">
+                            <i class="ph-fill ph-battery-plus mr-1"></i>+15% Emergency Bat Reserve: OFF
+                        </button>
+                    </div>
+
+                    <div class="space-y-2.5 flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-[11px] font-mono uppercase text-cyan-300 mb-1 flex items-center gap-1">
+                                <i class="ph-fill ph-cube"></i> A. Spacecraft Structure & Chassis (Select 1)
+                            </h3>
+                            <div id="busStructureGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5"></div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-[11px] font-mono uppercase text-amber-300 mb-1 flex items-center gap-1">
+                                <i class="ph-fill ph-sun"></i> B. Primary Power Generation (Select 1)
+                            </h3>
+                            <div id="busPowerGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-1.5"></div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-[11px] font-mono uppercase text-emerald-300 mb-1 flex items-center gap-1">
+                                <i class="ph-fill ph-battery-charging"></i> C. Energy Storage & Eclipse Battery (Select 1)
+                            </h3>
+                            <div id="busBatteryGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-1.5"></div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-[11px] font-mono uppercase text-purple-300 mb-1 flex items-center gap-1">
+                                <i class="ph-fill ph-shield-star"></i> D. Attitude Control, Thermal & Radiation Vault (Select 1)
+                            </h3>
+                            <div id="busShieldGrid" class="grid grid-cols-1 sm:grid-cols-3 gap-1.5"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: SCIENCE PAYLOAD INSTRUMENTS & PI OVERCLOCK -->
+                <div id="tab-payload" class="tab-pane hidden flex-1 min-h-0 h-full flex flex-col justify-between gap-2 overflow-hidden">
+                    <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800 pb-1.5 shrink-0">
+                        <div>
+                            <span class="text-[9px] font-mono uppercase text-emerald-400 block leading-none">SEAT 3 // PRINCIPAL INVESTIGATOR (SCIENCE) CONSOLE</span>
+                            <h2 class="text-sm sm:text-base font-bold text-white leading-tight mt-0.5">Select Scientific Payload (<span id="maxPayloadSlotsLabel" class="text-cyan-300 font-mono">4</span> Max)</h2>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="toggleScienceOverclock()" id="sciOverclockBtn" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold border transition bg-slate-900 text-slate-300 border-slate-700" title="Boosts Science yield +20%, but increases Payload Power Draw +25%">
+                                <i class="ph-fill ph-lightning mr-1"></i>Overclock: OFF
+                            </button>
+                            <div class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 font-mono text-[11px]">
+                                Slots: <span id="equippedCountBadge" class="text-emerald-400 font-bold">3 / 4</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="payloadInstrumentsGrid" class="grid grid-cols-1 md:grid-cols-2 auto-rows-fr gap-2 flex-1 min-h-0 overflow-y-auto pr-1"></div>
+                </div>
+
+                <!-- TAB 4: KEPLERIAN 3D ORBIT SLIDERS, COMMS & LAUNCH VEHICLE -->
+                <div id="tab-orbit" class="tab-pane hidden flex-1 min-h-0 h-full flex flex-col justify-between gap-2 overflow-hidden">
+                    <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800 pb-1.5 shrink-0">
+                        <div>
+                            <span class="text-[9px] font-mono uppercase text-purple-400 block leading-none">SEAT 4 // FLIGHT DYNAMICS OFFICER (FIDO) CONSOLE</span>
+                            <h2 class="text-sm sm:text-base font-bold text-white leading-tight mt-0.5">Keplerian Orbit, DSN Antenna & Launch Vehicle</h2>
+                        </div>
+                        <button onclick="toggleManualStagingMode()" id="fidoStagingModeBtn" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold border transition bg-amber-500/20 text-amber-300 border-amber-500/40" title="Trigger Stage 1 MECO and Fairing Jettison manually during 3D ascent for +75 Bonus Points">
+                            <i class="ph-fill ph-hand-tap mr-1"></i>Staging: MANUAL (+75 Pts)
+                        </button>
+                    </div>
+
+                    <div class="space-y-2.5 flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col justify-between">
+                        <!-- Real-Time Keplerian 3D Orbit Sliders -->
+                        <div class="p-2.5 rounded-xl bg-slate-950/90 border border-cyan-500/30 space-y-1.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-mono uppercase text-cyan-300 font-bold flex items-center gap-1">
+                                    <i class="ph-bold ph-sliders-horizontal"></i> Keplerian 3D Trajectory Shaper
+                                </span>
+                                <span id="keplerReadoutSummary" class="text-[10px] font-mono text-emerald-300">Eccentricity e = 0.04</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
+                                <div>
+                                    <div class="flex justify-between text-[10px] mb-0.5">
+                                        <span class="text-slate-400">Periapsis:</span>
+                                        <span id="valPeriapsis" class="text-cyan-300 font-bold">550 km</span>
+                                    </div>
+                                    <input id="sliderPeriapsis" type="range" min="200" max="3500" step="50" value="550" oninput="updateKeplerSliders()" class="w-full h-1.5">
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] mb-0.5">
+                                        <span class="text-slate-400">Apoapsis:</span>
+                                        <span id="valApoapsis" class="text-purple-300 font-bold">850 km</span>
+                                    </div>
+                                    <input id="sliderApoapsis" type="range" min="300" max="8000" step="50" value="850" oninput="updateKeplerSliders()" class="w-full h-1.5">
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-[10px] mb-0.5">
+                                        <span class="text-slate-400">Inclination:</span>
+                                        <span id="valInclination" class="text-amber-300 font-bold">98°</span>
+                                    </div>
+                                    <input id="sliderInclination" type="range" min="0" max="98" step="1" value="98" oninput="updateKeplerSliders()" class="w-full h-1.5">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-[11px] font-mono uppercase text-cyan-300 mb-1 flex items-center gap-1">
+                                <i class="ph-fill ph-planet"></i> A. Target Planetary Orbital Regime (Select 1)
+                            </h3>
+                            <div id="orbitSelectionGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-[11px] font-mono uppercase text-purple-300 mb-1 flex items-center gap-1">
+                                <i class="ph-fill ph-broadcast"></i> B. Deep Space Network (DSN) Transceiver (Select 1)
+                            </h3>
+                            <div id="commsSelectionGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5"></div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-[11px] font-mono uppercase text-rose-300 mb-1 flex items-center gap-1">
+                                <i class="ph-fill ph-rocket-launch"></i> C. Multi-Stage Launch Vehicle & Pad 39 Stack (Select 1)
+                            </h3>
+                            <div id="rocketSelectionGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: 4-PLAYER SPECIALIST CONSOLES, CREW AVATARS & NEGOTIATION BOARD -->
+                <div id="tab-team" class="tab-pane hidden flex-1 min-h-0 h-full flex flex-col justify-between gap-2 overflow-hidden">
+                    <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-800 pb-1.5 shrink-0">
+                        <div>
+                            <span class="text-[9px] font-mono uppercase text-amber-400 block leading-none">STEP 5 // 4-SEAT MISSION CONTROL CREW & POLL</span>
+                            <h2 class="text-sm sm:text-base font-bold text-white leading-tight mt-0.5">Specialist Crew Alignment & Trade-Off Vote</h2>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button onclick="openModal('coopLobbyModal')" class="px-2 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 font-mono font-bold text-[10px] flex items-center gap-1">
+                                <i class="ph-fill ph-users-four"></i> Lobby
+                            </button>
+                            <button onclick="triggerTeamNegotiationEvent()" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] flex items-center gap-1 shadow">
+                                <i class="ph-bold ph-lightning"></i> Next Dilemma
+                            </button>
+                            <button onclick="initiateGoNoGoPoll()" class="px-2 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px] flex items-center gap-1 shadow">
+                                <i class="ph-bold ph-check-square-offset"></i> GO/NO-GO
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2.5 flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col justify-between">
+                        <!-- 4 Specialist Department Status Cards with Animated Crew Portraits -->
+                        <div id="specialistStatusGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+
+                        <!-- Active Trade-off Dilemma Box -->
+                        <div id="teamDilemmaContainer" class="p-3 rounded-xl bg-slate-950/90 border border-amber-500/40 space-y-2 flex-1 flex flex-col justify-between"></div>
+                    </div>
+                </div>
+
+                <!-- Bottom Quick Navigation Footer inside Left Panel (Pinned cleanly via mt-2) -->
+                <div class="pt-2 mt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+                    <div class="flex items-center gap-1.5 truncate">
+                        <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping shrink-0"></span>
+                        <span id="footerHintText" class="truncate">Click "CAD" or "EXPAND 3D VIEW" in the 3D Viewport to inspect Earth & Spacecraft!</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="saveCurrentDesignToLeaderboard()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-mono text-[10px] flex items-center gap-1">
+                            <i class="ph-bold ph-floppy-disk"></i> Save Log
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- RIGHT COLUMN: 60% 3D DIGITAL TWIN VIEWPORT & COMPACT READINESS DASHBOARD -->
+        <section class="right-workspace">
+            
+            <!-- 3D Interactive Spacecraft, Launch Pad & Orbital Viewport (Hero Visual Centerpiece) -->
+            <div id="threeViewportPanel" class="glass-panel viewport-hero-size rounded-2xl overflow-hidden flex flex-col relative border border-cyan-500/25 shadow-2xl transition-all duration-300">
+                <div class="hud-corner hud-tl"></div>
+                <div class="hud-corner hud-tr"></div>
+                <div class="hud-corner hud-bl"></div>
+                <div class="hud-corner hud-br"></div>
+                
+                <!-- TOP HUD: Camera Status, 5-Mode Navigation Bar, Collapsible CAD & Science Drawers, Fullscreen Exploration Toggle -->
+                <div class="absolute top-3 left-3 right-3 z-20 flex flex-col gap-2 pointer-events-none">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <!-- Camera Title & Rendering Status -->
+                        <div class="hud-floating-glass px-3 py-1.5 rounded-xl pointer-events-auto flex items-center gap-3">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span id="viewportStatusDot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                    <span id="viewportModeTitle" class="font-mono text-[11px] uppercase tracking-wider text-cyan-300 font-bold">3D CLEANROOM VAB // DIGITAL TWIN</span>
+                                </div>
+                                <div id="viewportSubLabel" class="text-[10px] text-slate-400 font-mono">NASA 5-Layer Earth • Drag to rotate • Scroll to zoom</div>
+                            </div>
+                        </div>
+
+                        <!-- Right Toolbar: 5 Camera Modes + Expand 3D View Button -->
+                        <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+                            <!-- 5 Camera Navigation Bar -->
+                            <div class="hud-floating-glass flex flex-wrap items-center gap-1 p-1 rounded-xl">
+                                <button onclick="setCameraViewMode('spacecraft')" id="camBtn-spacecraft" class="px-2.5 py-1 rounded-lg text-[11px] font-mono bg-cyan-500/25 text-cyan-200 border border-cyan-400/55 font-bold shadow-sm flex items-center gap-1">
+                                    <i class="ph-bold ph-cube-focus text-cyan-300"></i> <span>Cleanroom</span>
+                                </button>
+                                <button onclick="setCameraViewMode('pad')" id="camBtn-pad" class="px-2.5 py-1 rounded-lg text-[11px] font-mono text-slate-300 hover:text-white hover:bg-slate-800/70 flex items-center gap-1">
+                                    <i class="ph-bold ph-rocket"></i> <span>Pad 3A9</span>
+                                </button>
+                                <button onclick="setCameraViewMode('orbit')" id="camBtn-orbit" class="px-2.5 py-1 rounded-lg text-[11px] font-mono text-slate-300 hover:text-white hover:bg-slate-800/70 flex items-center gap-1">
+                                    <i class="ph-bold ph-planet"></i> <span>Orbital 3D</span>
+                                </button>
+                                <button onclick="setCameraViewMode('chase')" id="camBtn-chase" class="px-2.5 py-1 rounded-lg text-[11px] font-mono text-slate-300 hover:text-white hover:bg-slate-800/70 flex items-center gap-1">
+                                    <i class="ph-bold ph-navigation-arrow"></i> <span>Chase Cam</span>
+                                </button>
+                                <button onclick="setCameraViewMode('nadir')" id="camBtn-nadir" class="px-2.5 py-1 rounded-lg text-[11px] font-mono text-slate-300 hover:text-white hover:bg-slate-800/70 flex items-center gap-1">
+                                    <i class="ph-bold ph-crosshair"></i> <span>Nadir Cam</span>
+                                </button>
+                            </div>
+
+                            <!-- Framed 95%x94% Exploration Mode Button -->
+                            <button onclick="toggleViewportExpandMode()" id="expandViewportBtn" class="hud-floating-glass px-2.5 py-1.5 rounded-xl hover:bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 font-mono text-[11px] font-bold flex items-center gap-1.5" title="Expand 3D Space Viewport (95% x 94% Exploration Mode)">
+                                <i id="expandViewportIcon" class="ph-bold ph-corners-out text-sm text-cyan-300"></i>
+                                <span id="expandViewportLabel">EXPAND 3D VIEW</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible CAD & Science Inspection Drawers (Compact Floating HUD Pills) -->
+                    <div id="cadControlsWrapper" class="flex flex-wrap items-start justify-between gap-2 w-full">
+                        <!-- Left: Collapsible CAD Controls Toggle & Drawer -->
+                        <div class="flex flex-col items-start gap-1.5">
+                            <div class="relative group pointer-events-auto flex items-center gap-2">
+                                <button onclick="toggleCadControlsDrawer()" id="cadControlsToggleBtn" title="Show CAD Controls" aria-label="Show CAD Controls" aria-expanded="false" class="hud-floating-glass px-2.5 h-8 rounded-xl hover:border-cyan-400/60 text-cyan-300 flex items-center gap-1.5 transition-all">
+                                    <i class="ph-duotone ph-cube text-xs text-cyan-400"></i>
+                                    <span class="font-mono text-[10px] font-semibold text-slate-200">CAD</span>
+                                    <i id="cadToggleArrowIcon" class="ph-bold ph-caret-down text-cyan-400 text-xs transition-transform duration-300"></i>
+                                </button>
+                                <span id="cadToggleTooltip" class="hud-floating-glass px-2 py-1 rounded-lg text-[10px] font-mono text-cyan-200 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap">
+                                    Show CAD Controls (<span id="cadExplodedMiniBadge">0%</span>)
+                                </span>
+                            </div>
+
+                            <!-- Expandable CAD Controls Drawer (Hidden by default via .cad-drawer-closed) -->
+                            <div id="cleanroomControlsOverlay" class="cad-drawer cad-drawer-closed hud-floating-glass px-3.5 py-2.5 rounded-xl flex flex-col gap-2 w-64">
+                                <div class="flex items-center justify-between text-[10px] font-mono border-b border-slate-800/80 pb-1">
+                                    <span class="text-cyan-300 font-bold flex items-center gap-1">
+                                        <i class="ph-fill ph-sliders"></i> EXPLODED CAD VIEW
+                                    </span>
+                                    <span id="explodedValLabel" class="text-cyan-300 font-bold">0%</span>
+                                </div>
+                                <input id="explodedSlider" type="range" min="0" max="100" value="0" oninput="setExplodedFactor(this.value)" class="w-full h-1.5">
+                                <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 gap-1.5">
+                                    <button onclick="toggleDeployArticulation()" id="deployToggleBtn" class="flex-1 py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-200 border border-cyan-400/35 font-mono text-[10px] font-bold">
+                                        <i class="ph-bold ph-arrows-out-line-horizontal mr-1"></i>Arrays: DEPLOYED
+                                    </button>
+                                    <button onclick="cyclePlanetAnimSpeed()" id="planetSpeedBtn" class="px-2.5 py-1.5 rounded-lg bg-[#0B1220] hover:bg-[#142238] text-emerald-300 border border-slate-700 font-mono text-[10px] font-bold" title="Adjust Planetary & Cloud Rotation Speed">
+                                        Spin: 1x
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Collapsible Planetary Science Layer & Telemetry Drawer (Hidden by default so planet is unobstructed) -->
+                        <div class="flex flex-col items-end gap-1.5 ml-auto">
+                            <div class="pointer-events-auto flex items-center gap-1.5">
+                                <button onclick="focusPrimaryPlanetRegion()" id="planetFocusRegionBtn" class="hud-floating-glass px-2.5 h-8 rounded-xl hover:border-cyan-400/55 text-cyan-200 font-mono text-[10px] font-semibold flex items-center gap-1" title="Focus Camera on Primary Research Region">
+                                    <i class="ph-bold ph-crosshair-simple text-cyan-400"></i> <span>Focus Target</span>
+                                </button>
+                                <button onclick="toggleMarsDustStorm()" id="marsDustStormBtn" class="hidden hud-floating-glass px-2.5 h-8 rounded-xl hover:border-amber-400/55 text-amber-300 font-mono text-[10px] font-semibold" title="Simulate Global Martian Dust Storm Optical Depth">
+                                    Dust: Nominal
+                                </button>
+                                <button onclick="toggleEuropaOceanCutaway()" id="europaCutawayBtn" class="hidden hud-floating-glass px-2.5 h-8 rounded-xl hover:border-cyan-400/55 text-cyan-200 font-mono text-[10px] font-semibold" title="Toggle Educational Subsurface Ocean Cross-Section">
+                                    ICE SURFACE
+                                </button>
+                                <button onclick="toggleScienceOverlayDrawer()" id="scienceOverlayToggleBtn" title="Toggle Planetary Science Layers" class="hud-floating-glass px-2.5 h-8 rounded-xl hover:border-purple-400/55 text-purple-300 flex items-center gap-1.5">
+                                    <i class="ph-duotone ph-stack text-xs text-purple-300"></i>
+                                    <span id="planetScienceHudTitle" class="font-mono text-[10px] uppercase tracking-wider text-slate-200 font-semibold">LAYERS // EARTH</span>
+                                    <i id="scienceOverlayCaret" class="ph-bold ph-caret-down text-purple-300 text-xs transition-transform duration-300"></i>
+                                </button>
+                            </div>
+
+                            <!-- Collapsible Science Layer Drawer Body -->
+                            <div id="planetScienceOverlayPanel" class="cad-drawer cad-drawer-right cad-drawer-closed pointer-events-auto hud-floating-glass px-3 py-2 rounded-xl flex flex-col gap-1.5 max-w-xs sm:max-w-md">
+                                <div id="planetLayerButtonsStrip" class="flex flex-wrap items-center gap-1"></div>
+                                <div id="planetDestinationTelemetryReadout" class="text-[10px] font-mono text-slate-300 flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/70"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive 3D ASCENT & STAGING TELEMETRY OVERLAY -->
+                <div id="ascentControlOverlay" class="hidden absolute top-24 right-3 z-20 hud-floating-glass px-3.5 py-2.5 rounded-xl border border-amber-500/45 w-72 space-y-2">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-1">
+                        <span class="text-[10px] font-mono uppercase text-amber-400 font-bold flex items-center gap-1">
+                            <i class="ph-fill ph-flame animate-bounce"></i> 3D ASCENT & STAGING DECK
+                        </span>
+                        <span id="ascentTimerLabel" class="font-mono text-xs font-bold text-white">T-00:00</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1.5 font-mono text-[11px]">
+                        <div class="p-1.5 rounded bg-[#0B1220]/90 border border-slate-800">
+                            <div class="text-[9px] text-slate-400">ALTITUDE</div>
+                            <div id="ascentAltLabel" class="text-cyan-300 font-bold">0.0 km</div>
+                        </div>
+                        <div class="p-1.5 rounded bg-[#0B1220]/90 border border-slate-800">
+                            <div class="text-[9px] text-slate-400">VELOCITY / Q</div>
+                            <div id="ascentVelLabel" class="text-emerald-300 font-bold">0.00 km/s</div>
+                        </div>
+                    </div>
+                    <div id="ascentStatusBanner" class="text-[11px] font-mono text-amber-200 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/30">
+                        Pad 3A9 Umbilicals Connected. Ready for GO/NO-GO Poll.
+                    </div>
+                    <div class="flex flex-col gap-1.5 pt-1">
+                        <button id="ascentActionBtn" onclick="handleAscentPrimaryAction()" class="w-full py-2 rounded-lg bg-amber-500/25 hover:bg-amber-500/35 text-amber-200 border border-amber-400/50 font-mono font-bold text-xs uppercase tracking-wider shadow-lg">
+                            <i class="ph-fill ph-rocket-launch mr-1"></i> INITIATE LIFTOFF (T-0)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Three.js Mount Container -->
+                <div id="threeCanvasContainer" class="w-full h-full flex-1 cursor-grab active:cursor-grabbing"></div>
+
+                <!-- BOTTOM FLOATING TELEMETRY & ATTITUDE HUD (Compact, Translucent, Unobtrusive) -->
+                <div class="absolute bottom-2 left-2.5 right-2.5 z-20 flex flex-col gap-1 pointer-events-none">
+                    <!-- Attitude Command & Live Illumination Strip -->
+                    <div id="flightAttitudeOverlay" class="pointer-events-auto hud-floating-glass flex flex-wrap items-center justify-between gap-1 px-2.5 py-1 rounded-xl">
+                        <div class="flex flex-wrap items-center gap-1">
+                            <span class="text-[9px] font-mono uppercase text-slate-400 hidden sm:inline mr-1">ATTITUDE:</span>
+                            <button onclick="setFlightAttitude('nadir')" id="attBtn-nadir" class="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/25 text-cyan-200 border border-cyan-400/50">
+                                <i class="ph-bold ph-crosshair"></i> NADIR SCIENCE
+                            </button>
+                            <button onclick="setFlightAttitude('dsn')" id="attBtn-dsn" class="px-2 py-0.5 rounded text-[9px] font-mono text-slate-300 bg-[#0B1220]/90 hover:text-white border border-slate-700/80">
+                                <i class="ph-bold ph-broadcast"></i> DSN DOWNLINK
+                            </button>
+                            <button onclick="setFlightAttitude('sun')" id="attBtn-sun" class="px-2 py-0.5 rounded text-[9px] font-mono text-slate-300 bg-[#0B1220]/90 hover:text-white border border-slate-700/80">
+                                <i class="ph-bold ph-sun"></i> SUN CHARGE
+                            </button>
+                            <button onclick="setFlightAttitude('prograde')" id="attBtn-prograde" class="px-2 py-0.5 rounded text-[9px] font-mono text-slate-300 bg-[#0B1220]/90 hover:text-white border border-slate-700/80">
+                                <i class="ph-bold ph-flame"></i> ΔV BURN
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-1.5 font-mono text-[9px]">
+                            <span id="umbraStatusBadge" class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold">
+                                <i class="ph-fill ph-sun"></i> SUNLIT (100% FLUX)
+                            </span>
+                            <span id="ssrBufferBadge" class="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                SSR: 18%
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 6-Metric Floating Orbital & Spacecraft Telemetry Ribbon -->
+                    <div class="pointer-events-auto hud-floating-glass px-2.5 py-1 rounded-xl grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
+                        <div>
+                            <div class="text-[8px] font-mono text-slate-400 uppercase leading-none">Mean Alt / Body</div>
+                            <div id="hudMeanAlt" class="text-[10px] font-mono font-bold text-white truncate mt-0.5">700 km (EARTH)</div>
+                        </div>
+                        <div>
+                            <div class="text-[8px] font-mono text-slate-400 uppercase leading-none">Pe × Ap (Inc)</div>
+                            <div id="hudOrbitName" class="text-[10px] font-mono font-bold text-cyan-300 truncate mt-0.5">650×750 km (98°)</div>
+                        </div>
+                        <div>
+                            <div class="text-[8px] font-mono text-slate-400 uppercase leading-none">Eclipse Umbra</div>
+                            <div id="hudEclipse" class="text-[10px] font-mono font-bold text-amber-300 mt-0.5">20% / Orbit</div>
+                        </div>
+                        <div>
+                            <div class="text-[8px] font-mono text-slate-400 uppercase leading-none">Rad / Total ΔV</div>
+                            <div class="text-[10px] font-mono font-bold truncate mt-0.5"><span id="hudRadiation" class="text-rose-300">Lv 1</span> • <span id="hudDeltaV" class="text-emerald-300">9.8 km/s</span></div>
+                        </div>
+                        <div>
+                            <div class="text-[8px] font-mono text-slate-400 uppercase leading-none">Spacecraft Power</div>
+                            <div id="hudFloatingPower" class="text-[10px] font-mono font-bold text-amber-300 truncate mt-0.5">+145W (420Wh)</div>
+                        </div>
+                        <div>
+                            <div class="text-[8px] font-mono text-slate-400 uppercase leading-none">Data Downlink</div>
+                            <div id="hudFloatingData" class="text-[10px] font-mono font-bold text-purple-300 truncate mt-0.5">155/130 Gbps (100%)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= BOTTOM OPERATIONS DASHBOARD: Mission Status · Crew · Engineering Alerts · Spacecraft Systems ================= -->
+            <div id="simpleDashPanel" class="hidden glass-panel shrink-0" aria-label="Simplified mission dashboard"></div>
+            <div id="diagnosticsAnalyzerPanel" class="ops-dashboard glass-panel shrink-0">
+                <div class="ops-dash-head">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <i class="ph ph-activity text-[color:var(--accent-cyan)]"></i>
+                        <h3 class="ops-section-title">Mission Operations Dashboard</h3>
+                        <span id="overallReadinessBadge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">GO FOR LAUNCH (92%)</span>
+                        <span id="teamSynergyLabel" class="text-[10px] font-mono text-[color:var(--text-secondary)] hidden xl:inline">Team Synergy: 100%</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="initiateGoNoGoPoll()" class="ops-ghost-btn ops-ghost-green" title="Pre-Launch GO/NO-GO poll → 3D Pad 3A9 ascent → flight simulation">
+                            <i class="ph ph-rocket-launch"></i><span>GO/NO-GO Poll</span>
+                        </button>
+                        <button onclick="openModal('diagnosticsModal')" class="ops-ghost-btn" title="Open the full Chief Engineer advisory log">
+                            <i class="ph ph-list-magnifying-glass"></i><span>All Alerts (<span id="alertCountBadge">1</span>)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="diagnosticsCollapsibleBody" class="ops-dash-grid">
+                    <!-- MISSION STATUS -->
+                    <section class="ops-dash-card">
+                        <div class="ops-card-title"><i class="ph ph-flag-checkered"></i>Mission Status</div>
+                        <div class="flex items-baseline justify-between gap-2">
+                            <span class="ops-k">Phase</span>
+                            <span id="dashMissionPhase" class="ops-v truncate">Design & Integration</span>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-2">
+                            <span class="ops-k">Objective</span>
+                            <span id="dashObjective" class="ops-v ops-v-soft truncate" title="">—</span>
+                        </div>
+                        <div>
+                            <div class="flex justify-between font-mono text-[9.5px] mb-0.5">
+                                <span class="ops-k">Stage checks</span>
+                                <span id="dashProgressLabel" class="text-[color:var(--accent-teal)] font-bold">0 / 4</span>
+                            </div>
+                            <div class="ops-bar"><div id="dashProgressFill" class="ops-bar-fill bg-teal-400" style="width:0%"></div></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-2.5 gap-y-1">
+                            <div>
+                                <div class="flex justify-between font-mono text-[9.5px]"><span class="ops-k">Budget</span><span id="barLabelBudget" class="text-emerald-400 font-bold">78%</span></div>
+                                <div class="ops-bar ops-bar-thin"><div id="barFillBudget" class="h-full bg-emerald-400 transition-all duration-300" style="width: 78%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between font-mono text-[9.5px]"><span class="ops-k">Lift mass</span><span id="barLabelMass" class="text-cyan-400 font-bold">65%</span></div>
+                                <div class="ops-bar ops-bar-thin"><div id="barFillMass" class="h-full bg-cyan-400 transition-all duration-300" style="width: 65%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between font-mono text-[9.5px]"><span class="ops-k">Power</span><span id="barLabelPower" class="text-amber-400 font-bold">+140W</span></div>
+                                <div class="ops-bar ops-bar-thin"><div id="barFillPower" class="h-full bg-amber-400 transition-all duration-300" style="width: 82%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between font-mono text-[9.5px]"><span class="ops-k">DSN link</span><span id="barLabelData" class="text-purple-400 font-bold">100%</span></div>
+                                <div class="ops-bar ops-bar-thin"><div id="barFillData" class="h-full bg-purple-400 transition-all duration-300" style="width: 100%"></div></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- CREW STATUS -->
+                    <section class="ops-dash-card">
+                        <div class="ops-card-title"><i class="ph ph-users-three"></i>Crew Status
+                            <button onclick="openActiveCharacterModal()" class="ml-auto ops-link" title="Customize astronaut / open crew lobby">Edit</button>
+                        </div>
+                        <div id="liveCrewReactionStrip" class="flex flex-col gap-1"></div>
+                    </section>
+
+                    <!-- ENGINEERING ALERTS -->
+                    <section class="ops-dash-card">
+                        <div class="ops-card-title"><i class="ph ph-warning-diamond"></i>Engineering Alerts
+                            <span id="dashAlertSummary" class="ml-auto font-mono text-[9px] normal-case tracking-normal text-[color:var(--text-secondary)]"></span>
+                        </div>
+                        <div id="diagnosticAlertsList" class="min-w-0 flex flex-col gap-1"></div>
+                    </section>
+
+                    <!-- SPACECRAFT SYSTEMS -->
+                    <section class="ops-dash-card">
+                        <div class="ops-card-title"><i class="ph ph-cpu"></i>Spacecraft Systems
+                            <button onclick="railNavigate('bus')" class="ml-auto ops-link" title="Open Spacecraft Systems workstation">Configure</button>
+                        </div>
+                        <div id="dashSystemsList" class="flex flex-col gap-1 min-w-0"></div>
+                    </section>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ================= RIGHT OPERATIONS PANEL: TELEMETRY · ATTITUDE · THERMAL · POWER · COMMS ================= -->
+        <aside id="opsSidePanel" class="ops-side glass-panel" aria-label="Spacecraft operations panel">
+            <div class="ops-side-head">
+                <div class="min-w-0">
+                    <div class="ops-section-title">Spacecraft Operations</div>
+                    <div id="opsSideSubtitle" class="font-mono text-[10px] text-[color:var(--text-secondary)] truncate">—</div>
+                </div>
+                <button onclick="toggleOpsSidePanel(false)" class="ops-icon-btn ops-icon-btn-sm" title="Hide operations panel"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="ops-side-tabs" role="tablist">
+                <button class="ops-side-tab" data-ops-tab="telemetry" onclick="setOpsSideTab('telemetry')" role="tab"><i class="ph ph-chart-line-up"></i><span>Telemetry</span></button>
+                <button class="ops-side-tab" data-ops-tab="attitude" onclick="setOpsSideTab('attitude')" role="tab"><i class="ph ph-compass"></i><span>Attitude</span></button>
+                <button class="ops-side-tab" data-ops-tab="thermal" onclick="setOpsSideTab('thermal')" role="tab"><i class="ph ph-thermometer-simple"></i><span>Thermal</span></button>
+                <button class="ops-side-tab" data-ops-tab="power" onclick="setOpsSideTab('power')" role="tab"><i class="ph ph-lightning"></i><span>Power</span></button>
+                <button class="ops-side-tab" data-ops-tab="comms" onclick="setOpsSideTab('comms')" role="tab"><i class="ph ph-broadcast"></i><span>Comms</span></button>
+            </div>
+            <div class="ops-side-legend">
+                <span><b class="ops-src ops-src-model">MODEL</b> design calc</span>
+                <span><b class="ops-src ops-src-sim">SIM</b> 3D sim state</span>
+                <span><b class="ops-src ops-src-nm">N/M</b> not modelled</span>
+            </div>
+            <div id="opsSidePanelBody" class="ops-side-body"></div>
+            <div class="ops-side-foot">
+                <i class="ph ph-info"></i>
+                <span>Simulated mission telemetry — derived from your spacecraft design, not live spacecraft data.</span>
+            </div>
+        </aside>
+    </main>
+
+    <!-- ================= MODAL 5: FULL CHIEF ENGINEER DIAGNOSTICS & ADVISORY LOG ================= -->
+    <div id="diagnosticsModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-2xl w-full p-5 border border-cyan-500/40 space-y-3.5 my-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                <div class="flex items-center gap-2.5">
+                    <i class="ph-fill ph-activity text-cyan-400 text-xl"></i>
+                    <div>
+                        <span class="text-[10px] font-mono uppercase text-cyan-400">CHIEF ENGINEER TELEMETRY LOG</span>
+                        <h2 class="text-base font-bold text-white">Complete Systems Readiness & Constraint Diagnostics</h2>
+                    </div>
+                </div>
+                <button onclick="closeModal('diagnosticsModal')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                    <i class="ph-bold ph-x"></i>
+                </button>
+            </div>
+            <div id="fullDiagnosticModalList" class="space-y-2 max-h-[60vh] overflow-y-auto pr-1"></div>
+            <div class="flex justify-end pt-2 border-t border-slate-800">
+                <button onclick="closeModal('diagnosticsModal')" class="px-4 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold text-xs">Return to Mission Control</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= FLOATING ATLAS — INTERACTIVE MISSION GUIDE ROBOT ================= -->
+    <div id="nexiWidgetContainer" class="fixed nexi-dock-br z-40 flex flex-col pointer-events-none max-w-[385px] w-full px-3 sm:px-0 transition-all duration-300">
+        
+        <!-- Expanded ATLAS Assistant & Tutorial Panel -->
+        <div id="nexiExpandedPanel" class="pointer-events-auto glass-panel rounded-2xl border border-cyan-400/45 shadow-2xl w-full overflow-hidden mb-2.5 transition-all duration-300">
+            <!-- ATLAS Header -->
+            <div class="bg-[#0B1220]/95 px-3.5 py-2 border-b border-cyan-500/25 flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5">
+                    <div id="nexiAvatarHeaderMount" class="w-10 h-10 rounded-xl bg-slate-950/90 border border-cyan-400/50 flex items-center justify-center shrink-0"></div>
+                    <div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-display font-bold text-xs text-white tracking-wider">ATLAS</span>
+                            <span id="nexiModeTag" class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-400/30">LIVE GUIDE</span>
+                        </div>
+                        <div id="nexiSubtitle" class="text-[10px] font-mono text-slate-400">Engineering & Mission-Control Assistant</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="startNexiTutorial(0)" class="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-400/35 font-mono text-[10px] font-bold" title="Start 10-Chapter Interactive Tutorial">
+                        <i class="ph-fill ph-graduation-cap"></i> Tutorial
+                    </button>
+                    <button onclick="cycleNexiDockPosition()" class="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-cyan-300" title="Reposition ATLAS Dock Corner">
+                        <i class="ph-bold ph-arrows-out-cardinal text-xs"></i>
+                    </button>
+                    <button onclick="minimizeNexiPanel()" class="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300" title="Minimize ATLAS">
+                        <i class="ph-bold ph-minus text-xs"></i>
+                    </button>
+                    <button onclick="disableNexiAssistant()" class="p-1.5 rounded-lg bg-slate-800/80 hover:bg-rose-950 text-slate-400 hover:text-rose-300" title="Disable Assistant (Re-enable in Top Bar)">
+                        <i class="ph-bold ph-power text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tutorial Step Bar (Hidden unless Tutorial Mode is active) -->
+            <div id="nexiTutorialBar" class="hidden bg-amber-950/40 border-b border-amber-500/30 px-3.5 py-2 space-y-1.5">
+                <div class="flex items-center justify-between text-[10px] font-mono">
+                    <span id="nexiTutorialChapterLabel" class="text-amber-300 font-bold uppercase">CHAPTER 1 / 10</span>
+                    <div class="flex items-center gap-1">
+                        <button onclick="restartNexiTutorial()" class="text-slate-400 hover:text-white underline">Restart</button>
+                        <span class="text-slate-600">•</span>
+                        <button onclick="exitNexiTutorial()" class="text-rose-300 hover:text-rose-200 underline">Exit Tutorial</button>
+                    </div>
+                </div>
+                <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="nexiTutorialProgressFill" class="h-full bg-amber-400 transition-all duration-300" style="width: 10%"></div>
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                    <button onclick="prevNexiTutorialStep()" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 font-mono text-[10px]">
+                        <i class="ph-bold ph-arrow-left"></i> Prev
+                    </button>
+                    <button onclick="nextNexiTutorialStep()" class="px-3 py-1 rounded bg-amber-400 hover:bg-amber-300 text-slate-950 font-mono font-bold text-[10px] flex items-center gap-1 shadow">
+                        <span>Continue</span> <i class="ph-bold ph-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Team-Wide Alert Banner (For 4-Player Co-Op Department Advisories) -->
+            <div id="nexiTeamAlertBox" class="hidden px-3.5 py-1.5 bg-rose-950/60 border-b border-rose-500/40 text-[11px] font-mono text-rose-200 flex items-center gap-2">
+                <i class="ph-fill ph-megaphone text-rose-400 shrink-0"></i>
+                <span id="nexiTeamAlertText" class="truncate">MISSION CONTROL ALERT</span>
+            </div>
+
+            <!-- Main Speech Bubble & Guidance Message -->
+            <div class="p-3.5 space-y-3 bg-slate-950/85">
+                <div class="p-3 rounded-xl bg-slate-900/95 border border-cyan-500/25 space-y-1.5 relative">
+                    <div class="flex items-center justify-between text-[10px] font-mono">
+                        <span id="nexiContextHeader" class="text-cyan-400 font-bold uppercase">WORKSTATION TELEMETRY BRIEF</span>
+                        <span id="nexiRoleContextBadge" class="text-emerald-300">SEAT 1 // FLIGHT</span>
+                    </div>
+                    <p id="nexiSpeechText" class="text-xs text-slate-200 leading-relaxed">
+                        Welcome to A.T.L.A.S! I am ATLAS, your onboard systems engineering companion. Select a NASA mission directive or ask me any spacecraft design question below.
+                    </p>
+                </div>
+
+                <!-- Quick Suggested Help Topic Chips -->
+                <div class="space-y-1">
+                    <div id="nexiQuickChipsLabel" class="text-[10px] font-mono uppercase text-slate-400">Quick Telemetry Queries:</div>
+                    <div id="nexiQuickChips" class="flex flex-wrap gap-1">
+                        <button onclick="askNexiQuestion('Why is my mission GO or NO-GO?')" class="px-2 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700/80 text-[10px] font-mono">
+                            Check GO/NO-GO?
+                        </button>
+                        <button onclick="askNexiQuestion('Why is my power negative or battery low?')" class="px-2 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700/80 text-[10px] font-mono">
+                            Power & Battery?
+                        </button>
+                        <button onclick="askNexiQuestion('Which instruments are best for my mission?')" class="px-2 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-700/80 text-[10px] font-mono">
+                            Best Instruments?
+                        </button>
+                        <button onclick="askNexiQuestion('What is periapsis and apoapsis?')" class="px-2 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-purple-300 border border-slate-700/80 text-[10px] font-mono">
+                            Orbit & Staging?
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interactive Question Input -->
+                <form onsubmit="handleNexiInputSubmit(event)" class="flex items-center gap-1.5 pt-1">
+                    <input id="nexiQuestionInput" type="text" placeholder="Ask ATLAS (e.g. How do I increase science?)" class="flex-1 bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none">
+                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-mono font-bold text-xs flex items-center gap-1">
+                        <i class="ph-bold ph-paper-plane-right"></i> Ask
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Minimized Floating ATLAS Orb Button -->
+        <button id="nexiMinimizedBtn" onclick="maximizeNexiPanel()" class="hidden pointer-events-auto flex items-center gap-2.5 transition" title="Open ATLAS guide" aria-label="Open ATLAS guide">
+            <div class="relative shrink-0">
+                <div id="nexiAvatarMiniMount" class="w-10 h-10 rounded-xl bg-slate-950 border border-cyan-400/40 flex items-center justify-center"></div>
+                <span class="nexi-status-dot"></span>
+            </div>
+            <div class="nexi-mini-text text-left pr-1.5">
+                <div id="nexiMiniTitle" class="font-display font-semibold text-[11px] tracking-wider text-[color:var(--text-primary)]">ATLAS · MISSION ASSISTANT</div>
+                <div id="nexiMiniSubtext" class="text-[10.5px] text-[color:var(--text-secondary)] line-clamp-2-custom">Click for live engineering advice</div>
+            </div>
+        </button>
+    </div>
+
+    <!-- ================= MODAL A: ADJUSTABLE ASTRONAUT PROFILE & CUSTOMIZATION STUDIO ================= -->
+    <div id="soloCharacterModal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-4xl w-full p-5 sm:p-6 border border-cyan-500/40 shadow-2xl space-y-4 my-auto modal-content-anim">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400 flex items-center justify-center">
+                        <i class="ph-fill ph-user-circle-gear text-cyan-300 text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-mono uppercase text-cyan-400 font-bold">ASTRONAUT PERSONNEL & HUD PROFILE STUDIO</span>
+                        <h2 class="text-lg font-bold text-white">Customize Your Astronaut Identity & Profile Display</h2>
+                    </div>
+                </div>
+                <button onclick="cancelProfileCustomization()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300" title="Cancel Changes">
+                    <i class="ph-bold ph-x"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <!-- Left: 8 Diverse Original Astronaut Presets + Sizing & Appearance Controls -->
+                <div class="lg:col-span-7 space-y-3">
+                    <div class="text-xs font-mono uppercase text-slate-300 font-bold flex items-center justify-between">
+                        <span>1. Choose Astronaut Portrait (8 Original Profiles)</span>
+                        <span class="text-[10px] text-cyan-400">Saved locally to your browser</span>
+                    </div>
+                    <div id="soloPresetGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[245px] overflow-y-auto pr-1"></div>
+
+                    <!-- Avatar Size & Profile Card Appearance Controls -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/90">
+                        <div class="p-2.5 rounded-xl bg-slate-950/85 border border-slate-800 space-y-1.5">
+                            <label class="block text-[10px] font-mono uppercase text-cyan-300 font-bold">2. Top Bar Avatar Size</label>
+                            <div class="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+                                <button type="button" onclick="setProfileAvatarSize('compact')" id="avatarSizeBtn-compact" class="py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white">
+                                    Compact (32px)
+                                </button>
+                                <button type="button" onclick="setProfileAvatarSize('standard')" id="avatarSizeBtn-standard" class="py-1.5 px-2 rounded-lg border border-cyan-400 bg-cyan-500/20 text-cyan-200 font-bold">
+                                    Standard (52px)
+                                </button>
+                                <button type="button" onclick="setProfileAvatarSize('large')" id="avatarSizeBtn-large" class="py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white">
+                                    Large (76px)
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="p-2.5 rounded-xl bg-slate-950/85 border border-slate-800 space-y-1.5">
+                            <label class="block text-[10px] font-mono uppercase text-teal-300 font-bold">3. Profile Card Appearance</label>
+                            <div class="grid grid-cols-3 gap-1.5 font-mono text-[10px]">
+                                <button type="button" onclick="setProfileCardStyle('compact')" id="cardStyleBtn-compact" class="py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white">
+                                    Compact
+                                </button>
+                                <button type="button" onclick="setProfileCardStyle('standard')" id="cardStyleBtn-standard" class="py-1.5 px-2 rounded-lg border border-cyan-400 bg-cyan-500/20 text-cyan-200 font-bold">
+                                    Standard
+                                </button>
+                                <button type="button" onclick="setProfileCardStyle('expanded')" id="cardStyleBtn-expanded" class="py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white">
+                                    Expanded
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Live Animated Character Preview & Identity Editors -->
+                <div class="lg:col-span-5 p-4 rounded-2xl bg-slate-950/90 border border-cyan-500/30 flex flex-col justify-between space-y-3">
+                    <!-- Live Top-Bar Card Preview -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                            <span>LIVE PROFILE CARD PREVIEW</span>
+                            <span id="previewSizeMetaLabel" class="text-cyan-300">52px • Standard</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-[#070D19] border border-slate-800 flex items-center justify-center min-h-[96px]">
+                            <div id="liveModalProfileCardPreview" class="flex items-center gap-3 p-2 rounded-xl bg-[#0B1220] border border-cyan-500/40 shadow-inner">
+                                <div id="soloPreviewAvatarMount" class="rounded-xl bg-slate-900 border-2 border-cyan-400/60 overflow-hidden shrink-0 shadow-lg transition-all duration-300" style="width: 52px; height: 52px;"></div>
+                                <div class="space-y-0.5 text-left min-w-0">
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span id="soloPreviewName" class="text-sm font-mono font-bold text-white">CMDR. VANCE</span>
+                                        <span id="soloPreviewBadge" class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">FLIGHT DIRECTOR</span>
+                                    </div>
+                                    <div id="soloPreviewFullName" class="text-xs font-medium text-slate-200">Cmdr. Aria Vance</div>
+                                    <p id="soloPreviewBio" class="text-[10px] text-slate-400 leading-snug line-clamp-2-custom">Veteran JPL Flight Director & Deep Space Systems Architect.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2 pt-1 border-t border-slate-800 text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-mono uppercase text-slate-400 mb-1">Player Callsign</label>
+                                <input id="soloCallsignInput" type="text" maxlength="20" oninput="updateSoloCustomizationPreview()" class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-lg px-2.5 py-1.5 font-mono text-xs text-white" value="CMDR. VANCE">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-mono uppercase text-slate-400 mb-1">Character Name</label>
+                                <input id="soloCharNameInput" type="text" maxlength="26" oninput="updateSoloCustomizationPreview()" class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-lg px-2.5 py-1.5 text-xs text-white" value="Cmdr. Aria Vance">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-slate-400 mb-1">Specialist Department & Role</label>
+                            <select id="soloDepartmentSelect" onchange="updateSoloCustomizationPreview()" class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-lg px-2.5 py-1.5 font-mono text-xs text-cyan-300">
+                                <option value="FLIGHT|Flight Director">FLIGHT // Flight Director & Mission Commander</option>
+                                <option value="EECOM|EECOM Systems Engineer">EECOM // Spacecraft Power & Thermal Systems</option>
+                                <option value="SCIENCE|Principal Investigator">SCIENCE // Lead Scientist & Payload Specialist</option>
+                                <option value="FIDO|Flight Dynamics Officer">FIDO // Orbital Mechanics & Launch Staging</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-slate-400 mb-1">Flight Suit & Telemetry Accent Color</label>
+                            <div id="soloSuitColorGrid" class="grid grid-cols-6 gap-1.5"></div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-mono uppercase text-slate-400 mb-1">Preview Character Animation State</label>
+                            <div class="grid grid-cols-4 gap-1 font-mono text-[10px]">
+                                <button type="button" onclick="setSoloPreviewAnim('idle')" class="py-1 rounded bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700">Idle</button>
+                                <button type="button" onclick="setSoloPreviewAnim('typing')" class="py-1 rounded bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-700">Console</button>
+                                <button type="button" onclick="setSoloPreviewAnim('talking')" class="py-1 rounded bg-slate-900 hover:bg-slate-800 text-amber-300 border border-slate-700">Briefing</button>
+                                <button type="button" onclick="setSoloPreviewAnim('celebrate')" class="py-1 rounded bg-slate-900 hover:bg-slate-800 text-purple-300 border border-slate-700">Success</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <button type="button" onclick="cancelProfileCustomization()" class="py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono font-bold text-xs">
+                            Cancel
+                        </button>
+                        <button type="button" onclick="confirmSoloCharacterSelection()" class="py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-display font-bold text-xs uppercase tracking-wider shadow-lg">
+                            <i class="ph-bold ph-floppy-disk mr-1"></i> Save Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL C: "LET'S EXPLORE!" MISSION INTRODUCTION & START FLOW ================= -->
+    <div id="letsExploreModal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-3xl w-full p-5 sm:p-6 border border-cyan-400/50 shadow-2xl space-y-4 my-auto modal-content-anim">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-500/30 to-teal-500/25 border border-cyan-300/50 flex items-center justify-center shadow-lg">
+                        <i class="ph-fill ph-planet text-cyan-300 text-2xl"></i>
+                    </div>
+                    <div>
+                        <span id="exploreModalModeBadge" class="text-[10px] font-mono uppercase text-teal-300 font-bold tracking-wider">MISSION BRIEFING & DEPLOYMENT // STEP 1 OF 4</span>
+                        <h2 id="exploreModalMissionTitle" class="text-lg sm:text-xl font-display font-bold text-white">EARTH-PULSE: Climate & SAR Radar</h2>
+                    </div>
+                </div>
+                <button onclick="closeModal('letsExploreModal')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                    <i class="ph-bold ph-x"></i>
+                </button>
+            </div>
+
+            <!-- Commander / Crew & ATLAS Mission Introduction -->
+            <div id="exploreModalBody" class="space-y-4"></div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800">
+                <button onclick="closeModal('letsExploreModal'); openProfileCustomizerModal();" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 text-xs font-mono flex items-center gap-1.5">
+                    <i class="ph-bold ph-user-gear"></i> Customize Astronaut Profile
+                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="closeModal('letsExploreModal'); initiateGoNoGoPoll();" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/40 font-mono text-xs font-bold flex items-center gap-1.5" title="Jump directly to Pre-Launch GO/NO-GO Poll">
+                        <i class="ph-fill ph-check-square-offset"></i> Direct to GO/NO-GO Poll
+                    </button>
+                    <button onclick="startGuidedMissionExperience()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-display font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-cyan-500/25">
+                        <i class="ph-fill ph-rocket-launch text-base"></i>
+                        <span>START MISSION</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL B: 4-PLAYER MULTIPLAYER CREW ASSIGNMENT LOBBY ================= -->
+    <div id="coopLobbyModal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-5xl w-full p-5 sm:p-6 border border-amber-500/40 shadow-2xl space-y-4 my-auto modal-content-anim">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400 flex items-center justify-center">
+                        <i class="ph-fill ph-users-four text-amber-300 text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-mono uppercase text-amber-400 font-bold">4-PLAYER MISSION CONTROL // CREW ASSIGNMENT LOBBY</span>
+                        <h2 class="text-lg font-bold text-white">Specialist Seat Roster & Local Room Synchronization</h2>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 font-mono text-xs text-cyan-300">
+                        Room Code: <strong id="lobbyRoomCodeBadge" class="text-white">JPL-4</strong>
+                    </span>
+                    <button onclick="closeModal('coopLobbyModal')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                        <i class="ph-bold ph-x"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="text-slate-300">
+                    <i class="ph-fill ph-info text-cyan-400 mr-1"></i>
+                    <strong>Independent Seat Identity:</strong> Claim any specialist seat below, customize that seat's astronaut & callsign, and toggle <strong>READY</strong>. Changes sync across same-browser tabs via <code class="text-cyan-300">BroadcastChannel</code> without overwriting other seats.
+                </div>
+                <button onclick="openModal('roomSyncModal')" class="px-2.5 py-1 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 font-mono text-[11px]">
+                    <i class="ph-bold ph-share-network mr-1"></i>Room Code / Packet Sync
+                </button>
+            </div>
+
+            <!-- 4 Specialist Crew Slots Grid -->
+            <div id="coopLobbySlotsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+
+            <!-- Active Seat Customization Strip inside Lobby -->
+            <div class="p-4 rounded-xl bg-slate-950/95 border border-cyan-500/30 grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                <div class="lg:col-span-4 flex items-center gap-3">
+                    <div id="lobbyEditAvatarMount" class="w-16 h-16 rounded-xl bg-slate-900 border border-cyan-400/50 overflow-hidden shrink-0"></div>
+                    <div>
+                        <span id="lobbyEditSeatTitle" class="text-[10px] font-mono uppercase text-cyan-400 font-bold">EDITING SEAT 1 // FLIGHT</span>
+                        <div class="mt-1">
+                            <input id="lobbyCallsignInput" type="text" maxlength="18" oninput="updateLobbySeatCallsign(this.value)" class="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 font-mono text-xs text-white w-44" placeholder="Enter Callsign">
+                        </div>
+                    </div>
+                </div>
+                <div class="lg:col-span-5">
+                    <div class="text-[10px] font-mono uppercase text-slate-400 mb-1">Select Astronaut Preset for Seat <span id="lobbyEditSeatNum">1</span>:</div>
+                    <div id="lobbyPresetMiniGrid" class="grid grid-cols-8 gap-1"></div>
+                </div>
+                <div class="lg:col-span-3 flex flex-col gap-1.5">
+                    <div id="lobbySuitColorMiniGrid" class="flex items-center justify-end gap-1 mb-1"></div>
+                    <button onclick="toggleLobbySeatReady(state.activeSeat)" id="lobbyReadyToggleBtn" class="w-full py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono font-bold text-xs">
+                        <i class="ph-bold ph-check-circle mr-1"></i> MARK SEAT READY
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                <div id="lobbyReadySummaryText" class="text-xs font-mono text-emerald-300">4 / 4 Specialist Stations Ready</div>
+                <div class="flex items-center gap-2">
+                    <button onclick="markAllLobbySeatsReady()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/35 font-mono text-xs font-bold">
+                        <i class="ph-bold ph-checks mr-1"></i>Mark All Ready
+                    </button>
+                    <button onclick="proceedFromCoopLobbyToMission()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-emerald-400 hover:from-amber-300 hover:to-emerald-300 text-slate-950 font-display font-bold text-xs sm:text-sm shadow-lg">
+                        <i class="ph-fill ph-rocket-launch mr-1"></i> Proceed to Mission Briefing
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 0: NASA PRE-LAUNCH GO / NO-GO POLL OVERLAY ================= -->
+    <div id="goNoGoModal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-2xl w-full p-6 border border-cyan-500/40 shadow-2xl space-y-4 my-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400 flex items-center justify-center">
+                        <i class="ph-fill ph-headset text-amber-300 text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] font-mono uppercase text-amber-400 font-bold">FLIGHT DIRECTOR VOICE LOOP // NET 1</span>
+                        <h2 class="text-lg font-bold text-white">Pre-Launch Crew Console GO / NO-GO Poll</h2>
+                    </div>
+                </div>
+                <button onclick="closeModal('goNoGoModal')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                    <i class="ph-bold ph-x"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-300">
+                Flight Director polling all Mission Control specialist crew stations against live physical constraints before authorizing Pad 3A9 terminal count:
+            </p>
+
+            <!-- 5 Station Poll Rows with Specialist Crew Avatars -->
+            <div id="pollStationsContainer" class="space-y-2 font-mono text-xs"></div>
+
+            <div id="pollSummaryBanner" class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-300">
+                Polling crew stations in sequence...
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeModal('goNoGoModal')" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono">
+                    Abort & Return to VAB
+                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="start3DPadAscentSequence()" id="proceed3DLaunchBtn" class="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-emerald-400 hover:from-amber-400 hover:to-emerald-300 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg">
+                        <i class="ph-fill ph-rocket-launch"></i>
+                        <span>COMMIT TO 3D PAD LIFTOFF & STAGING</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 1: INTERACTIVE FLIGHT SIMULATION & ANOMALY ENGINE ================= -->
+    <div id="simulationModal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-4xl w-full p-5 sm:p-6 border border-cyan-500/40 shadow-2xl space-y-5 my-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-400 flex items-center justify-center">
+                        <i class="ph-fill ph-rocket-launch text-cyan-300 text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-[11px] font-mono uppercase text-cyan-400">MISSION OPERATIONS TELEMETRY STREAM</span>
+                        <h2 id="simModalTitle" class="text-lg font-bold text-white">Executing Mission Flight Profile...</h2>
+                    </div>
+                </div>
+                <button onclick="closeSimulationModal()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                    <i class="ph-bold ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <div id="simPhaseStepper" class="grid grid-cols-5 gap-2"></div>
+
+            <!-- Crew Flight Deck Reaction Strip inside Simulation -->
+            <div id="simCrewReactionBar" class="grid grid-cols-2 sm:grid-cols-4 gap-2"></div>
+
+            <div id="simActiveStageContainer" class="p-4 rounded-xl bg-slate-950 border border-slate-800 min-h-[240px] flex flex-col justify-between space-y-4"></div>
+
+            <div id="simModalFooter" class="flex items-center justify-between pt-2 border-t border-slate-800">
+                <div class="font-mono text-xs text-slate-400" id="simFooterStatus">Telemetry nominal. Awaiting command...</div>
+                <div class="flex items-center gap-2">
+                    <button id="simNextPhaseBtn" onclick="advanceSimulationPhase()" class="px-5 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-1.5">
+                        <span>Proceed to Next Phase</span>
+                        <i class="ph-bold ph-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 2: SPACE SYSTEMS ENGINEERING EDU-GUIDE ================= -->
+    <div id="manualModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-3xl w-full p-6 border border-cyan-500/30 space-y-4 my-auto max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <i class="ph-fill ph-book-open-text text-cyan-400 text-2xl"></i>
+                    <div>
+                        <span class="text-[10px] font-mono uppercase text-cyan-400">JPL SYSTEMS ENGINEERING HANDBOOK</span>
+                        <h2 class="text-lg font-bold text-white">How Real Space Mission Trade-Offs & Staging Work</h2>
+                    </div>
+                </div>
+                <button onclick="closeModal('manualModal')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                    <i class="ph-bold ph-x"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs leading-relaxed text-slate-300">
+                <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                    <h3 class="font-bold text-cyan-300 mb-1 flex items-center gap-1.5"><i class="ph-fill ph-rocket"></i> 1. Multi-Stage Ascent, Max-Q & Clamshell Fairings</h3>
+                    <p>During launch from Pad 3A9, rockets experience peak dynamic pressure (<strong>Max-Q</strong>) in the lower atmosphere. A two-piece clamshell <strong>Payload Fairing</strong> protects your folded spacecraft from aerodynamic heating until above 100 km, where it jettisons right after First Stage separation (MECO).</p>
+                </div>
+                <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                    <h3 class="font-bold text-amber-300 mb-1 flex items-center gap-1.5"><i class="ph-fill ph-lightning"></i> 2. 3D Umbra Eclipse & RTG vs. Solar Flux</h3>
+                    <p>Spacecraft passing through the planet's 3D shadow cone (umbra) drop to <strong>0W solar output</strong> and rely on Lithium-Ion or Solid-State battery banks. At Mars (45% flux) or Europa (8% flux), solar arrays lose efficiency compared to constant <strong>MMRTG nuclear isotope</strong> power.</p>
+                </div>
+                <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                    <h3 class="font-bold text-purple-300 mb-1 flex items-center gap-1.5"><i class="ph-fill ph-broadcast"></i> 3. Keplerian Ellipses & DSN Bandwidth</h3>
+                    <p>Adjusting <strong>Periapsis, Apoapsis, and Inclination</strong> reshapes your 3D orbit. Higher orbits reduce eclipse time but require more $\Delta v$ from your launch vehicle. High-rate SAR and Hyperspectral instruments require X-Band, Ka-Band, or Optical Lasercomm to prevent onboard SSR data overflow.</p>
+                </div>
+                <div class="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                    <h3 class="font-bold text-emerald-300 mb-1 flex items-center gap-1.5"><i class="ph-fill ph-users-four"></i> 4. 4-Player Crew Roles & ATLAS Companion</h3>
+                    <p>Assign customized astronauts to <strong>FLIGHT</strong>, <strong>EECOM</strong>, <strong>SCIENCE</strong>, and <strong>FIDO</strong>. Open multiple browser tabs on the same Room Code to sync your crew roster and spacecraft telemetry in real time, and ask <strong>ATLAS</strong> for context-aware engineering advice.</p>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeModal('manualModal'); startNexiTutorial(0);" class="px-4 py-2 rounded-lg bg-amber-400 text-slate-950 font-bold text-xs">Launch Interactive ATLAS Tutorial</button>
+                <button onclick="closeModal('manualModal')" class="px-4 py-2 rounded-lg bg-cyan-500 text-slate-950 font-bold text-xs">Back to Mission Control</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 3: SAVED MISSION DESIGNS & COMPARISON LEADERBOARD ================= -->
+    <div id="leaderboardModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-4xl w-full p-6 border border-amber-500/30 space-y-4 my-auto max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <i class="ph-fill ph-trophy text-amber-400 text-2xl"></i>
+                    <div>
+                        <span class="text-[10px] font-mono uppercase text-amber-400">ARCHITECTURE COMPARISON LOG</span>
+                        <h2 class="text-lg font-bold text-white">Saved Mission Designs & Simulation Scores</h2>
+                    </div>
+                </div>
+                <button onclick="closeModal('leaderboardModal')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                    <i class="ph-bold ph-x"></i>
+                </button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs font-mono">
+                    <thead>
+                        <tr class="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
+                            <th class="py-2 px-2">Mission / Commander</th>
+                            <th class="py-2 px-2">Cost / Budget</th>
+                            <th class="py-2 px-2">Mass / Rocket</th>
+                            <th class="py-2 px-2">Effective Science</th>
+                            <th class="py-2 px-2">Readiness / Score</th>
+                            <th class="py-2 px-2">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="savedDesignsTableBody" class="divide-y divide-slate-800/70"></tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-between items-center pt-2">
+                <button onclick="saveCurrentDesignToLeaderboard()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono">
+                    + Save Current Active Configuration
+                </button>
+                <button onclick="closeModal('leaderboardModal')" class="px-4 py-2 rounded-lg bg-slate-800 text-white font-bold text-xs">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 4: 4-PLAYER MULTIPLAYER ROOM SYNC & PACKET SHARE ================= -->
+    <div id="roomSyncModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+        <div class="glass-panel rounded-2xl max-w-xl w-full p-6 border border-cyan-500/40 space-y-4 my-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <i class="ph-fill ph-share-network text-cyan-400 text-2xl"></i>
+                    <div>
+                        <span class="text-[10px] font-mono uppercase text-cyan-400">LOCAL TAB & PACKET TELEMETRY BRIDGE</span>
+                        <h2 class="text-lg font-bold text-white">4-Player Mission Control Room Sync</h2>
+                    </div>
+                </div>
+                <button onclick="closeModal('roomSyncModal')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+                    <i class="ph-bold ph-x"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                    <div class="font-mono font-bold text-cyan-300 uppercase">A. Same-Browser Multi-Tab BroadcastChannel Sync</div>
+                    <p class="text-slate-400">Open this application in up to 4 browser tabs/windows on the same Room Code. Hardware, orbit, and per-seat crew roster updates synchronize automatically across local tabs without overwriting other seats' identities.</p>
+                    <div class="flex items-center gap-2 pt-1">
+                        <input id="roomCodeInput" type="text" maxlength="8" value="JPL-4" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-sm font-bold text-cyan-300 uppercase w-32">
+                        <button onclick="joinBroadcastRoomFromInput()" class="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold font-mono">
+                            Connect Room
+                        </button>
+                        <button onclick="generateRandomRoomCode()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono">
+                            New Code
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+                    <div class="font-mono font-bold text-amber-300 uppercase">B. Shareable Base64 Mission & Crew Packet</div>
+                    <p class="text-slate-400">Copy this telemetry packet to share your spacecraft architecture and crew roster with teammates, or paste a packet below:</p>
+                    <textarea id="packetTextarea" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 font-mono text-[11px] text-emerald-300" placeholder="Mission Packet Base64..."></textarea>
+                    <div class="flex items-center justify-between gap-2">
+                        <button onclick="copyMissionPacket()" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-mono font-bold">
+                            <i class="ph-bold ph-copy mr-1"></i>Copy Current Packet
+                        </button>
+                        <button onclick="importMissionPacket()" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-bold">
+                            <i class="ph-bold ph-download-simple mr-1"></i>Import & Sync Packet
+                        </button>
+                    </div>
+                    <div id="packetFeedbackMsg" class="text-[11px] font-mono text-cyan-300"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application scripts: order matters (classic scripts sharing one global scope) -->
+    <script src="js/core/01-sound-synthesis-engine-web-audio-api-telem.js"></script>
+    <script src="js/game/02-astronaut-character-presets-suit-colors-an.js"></script>
+    <script src="js/data/03-space-mission-engineering-database.js"></script>
+    <script src="js/core/04-global-game-state-crew-profiles-multiplaye.js"></script>
+    <script src="js/game/05-solo-character-studio-4-player-crew-lobby.js"></script>
+    <script src="js/game/06-let-s-explore-mission-introduction-guided.js"></script>
+    <script src="js/core/07-atlas-interactive-guide-bot-10-chapter-tut.js"></script>
+    <script src="js/core/08-core-physics-keplerian-orbit-systems-engin.js"></script>
+    <script src="js/game/09-ui-renderers-crew-atlas-synchronization.js"></script>
+    <script src="js/game/10-user-actions-collapsible-cad-drawer-fullsc.js"></script>
+    <script src="js/game/11-planetary-science-layer-menu-destination-e.js"></script>
+    <script src="js/game/12-nasa-5-layer-realistic-earth-planetary-3d.js"></script>
+    <script src="js/game/13-nasa-pre-launch-go-no-go-poll-3d-ascent-st.js"></script>
+    <script src="js/game/14-interactive-5-phase-mission-simulation-cre.js"></script>
+    <script src="js/game/15-saved-designs-architecture-comparison-tabl.js"></script>
+    <script src="js/explorer/16-solar-system-explorer-cosmic-history-timel.js"></script>
+    <script src="js/core/17-ops-dashboard-layer-navigation-rail-operat.js"></script>
+    <script src="js/explorer/18-let-s-explore-ops-style-explorer-module.js"></script>
+    <script src="js/shaders/19-planetary-rendering-library-glsl.js"></script>
+    <script src="js/data/20-per-body-surface-recipes.js"></script>
+    <script src="js/data/21-extended-solar-system-catalog-physical-dat.js"></script>
+    <script src="js/engine/22-planet-engine-core-gpu-texture-baker-lazy.js"></script>
+    <script src="js/engine/23-let-s-explore-3d-solar-system-engine.js"></script>
+    <script src="js/engine/24-play-game-mission-destination-surfaces-moo.js"></script>
+    <script src="js/engine/25-play-game-realistic-mission-surfaces-witho.js"></script>
+    <script src="js/game/26-play-game-experience-modes-guided-mission.js"></script>
+    <script src="js/game/27-play-game-spacecraft-builder-stages-2-4.js"></script>
+    <script src="js/game/28-play-game-mission-readiness-checklist-stag.js"></script>
+    <script src="js/game/29-play-game-launch-mission-experience-stage.js"></script>
+    <script src="js/game/30-play-game-simplified-mission-dashboard-cad.js"></script>
+    <script src="js/game/31-atlas-interactive-mission-instructor.js"></script>
+    <script src="js/game/32-play-game-mode-specific-layouts.js"></script>
+    <script src="js/game/33-beginner-friendly-terminology-contextual-t.js"></script>
+    <script src="js/game/34-mission-feedback-player-progress-achieveme.js"></script>
+    <script src="js/game/35-crew-roles-beginner-friendly-multiplayer-e.js"></script>
+    <script src="js/game/36-responsive-accessibility-layer.js"></script>
+    <script src="js/core/37-audio-manager-master-music-effects-ambient.js"></script>
+    <script src="js/game/38-pad-3a9-earth-to-space-flight-view.js"></script>
+    <script src="js/core/39-initialization-on-window-load.js"></script>
+    <!-- PLAY GAME launcher: 1 · experience mode → 2 · mission selection -->
+    <div id="missionLauncherOverlay" class="hidden" role="dialog" aria-label="Choose experience and mission">
+        <div class="ml-shell">
+            <div class="ml-top"><span class="ml-steps">A.T.L.A.S · PLAY GAME</span><button class="ml-skip" onclick="closeMissionLauncher()">Skip to console <i class="ph ph-x"></i></button></div>
+            <div id="missionLauncherBody"></div>
+        </div>
+    </div>
+</body>
+</html>
